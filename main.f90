@@ -235,7 +235,7 @@ subroutine calculate_forces(number_of_layers, t, jmax, volume_force, bottom_forc
 end subroutine
 
 subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
-         volume_force, bottom_force, cauchy_integral, cauchy, posunuti)
+         volume_force, bottom_force, cauchy_integral, cauchy, displacement)
   implicit none
 
   integer, intent(in) :: number_of_layers, jmax, j, m
@@ -244,7 +244,7 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
                         bottom_force(3*(jmax*(jmax+1)/2+jmax)+1), &
                         cauchy_integral(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3)
   complex*16, intent(inout) :: cauchy(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3), &
-                         posunuti(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1)
+  displacement(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1)
 
   ! Declare workspace matrices and vectors with fixed bounds.
   real*8 :: A(1000,1000), AL(1000,1000)
@@ -339,19 +339,19 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
   ! Deallocate the index array.
   DEALLOCATE(INDX)
 
-  ! Store the solution into 'posunuti' and 'cauchy' arrays.
+  ! Store the solution into 'displacement' and 'cauchy' arrays.
   do i = 1, number_of_layers
-      posunuti(i, 3 * ((j * (j + 1)) / 2 + m) - 1) = cmplx(yr(6 * (i - 1) + 1), yi(6 * (i - 1) + 1))
-      posunuti(i, 3 * ((j * (j + 1)) / 2 + m) + 1) = cmplx(yr(6 * (i - 1) + 2), yi(6 * (i - 1) + 2))
+    displacement(i, 3 * ((j * (j + 1)) / 2 + m) - 1) = cmplx(yr(6 * (i - 1) + 1), yi(6 * (i - 1) + 1))
+    displacement(i, 3 * ((j * (j + 1)) / 2 + m) + 1) = cmplx(yr(6 * (i - 1) + 2), yi(6 * (i - 1) + 2))
       cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 7) = cmplx(yr(6 * (i - 1) + 4), yi(6 * (i - 1) + 4))
       cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 5) = cmplx(yr(6 * (i - 1) + 5), yi(6 * (i - 1) + 5))
       cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 3) = cmplx(yr(6 * (i - 1) + 6), yi(6 * (i - 1) + 6))
   end do
 
-  ! Store the solution for the last layer into 'posunuti'.
-  posunuti(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) - 1) = cmplx(yr(6 * number_of_layers + 1),&
+  ! Store the solution for the last layer into 'displacement'.
+  displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) - 1) = cmplx(yr(6 * number_of_layers + 1),&
                                                                       yi(6 * number_of_layers + 1))
-  posunuti(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) + 1) = cmplx(yr(6 * number_of_layers + 2),&
+                                                                      displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) + 1) = cmplx(yr(6 * number_of_layers + 2),&
                                                                       yi(6 * number_of_layers + 2))
 
 
@@ -359,9 +359,9 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
 ! Tady ukladam vysledky do souboru
   if (j==2) then
       if (m==0) then
-      open(4, file = 'posunuti.dat')
+      open(4, file = 'displacement.dat')
           do i=1, number_of_layers+1
-             write(4,*) 76000 + 800*(i-3.0/2.0), real(posunuti(i, 8)), real(posunuti(i, 10))
+             write(4,*) 76000 + 800*(i-3.0/2.0), real(displacement(i, 8)), real(displacement(i, 10))
           end do
          close(4)
           open(5, file = 'napeti.dat')
@@ -372,7 +372,7 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
      end if
   end if
 
-  !!!!!!!!
+!!!!!!!!
 
 end subroutine
 
@@ -460,10 +460,10 @@ do 14 i=n,1,-1
 return
 END subroutine banbks
 
-subroutine calculate_and_print_surface_radial_displacement(number_of_layers, jmax, t, number_of_time_steps, uu2, uu0, delta_t, posunuti)
+subroutine calculate_and_print_surface_radial_displacement(number_of_layers, jmax, t, number_of_time_steps, uu2, uu0, delta_t, displacement)
       integer number_of_layers, t, jmax, number_of_time_steps
       real*8 delta_t
-      complex*16 posunuti(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1), uu2(number_of_time_steps), uu0(number_of_time_steps),&
+      complex*16 displacement(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1), uu2(number_of_time_steps), uu0(number_of_time_steps),&
        koef1, koef2
       integer j, m, th, ph, i
       real*8 fac, x, thr, phr, j1, p(1000), xm
@@ -488,14 +488,14 @@ subroutine calculate_and_print_surface_radial_displacement(number_of_layers, jma
           fac=2d0
           if(m.eq.0) fac=1d0
           i=j*(j+1)/2+m+1 ! sdruzeny index
-          koef1=sqrt((j1)/(2*j1+1))*(1/2.0)*(posunuti(number_of_layers,3*(j*(j+1)/2+m)-1)+ &
-                      posunuti(number_of_layers+1,3*(j*(j+1)/2+m)-1))
-          koef2=sqrt((j1+1)/(2*j1+1))*(1/2.0)*(posunuti(number_of_layers,3*(j*(j+1)/2+m)+1)+ &
-                      posunuti(number_of_layers+1,3*(j*(j+1)/2+m)+1))
-          !koef1=sqrt((j1)/(2*j1+1))*(1/2.0)*(posunuti(1,3*(j*(j+1)/2+m)-1)+ &
-           !           posunuti(2,3*(j*(j+1)/2+m)-1))
-          !koef2=sqrt((j1+1)/(2*j1+1))*(1/2.0)*(posunuti(1,3*(j*(j+1)/2+m)+1)+ &
-           !           posunuti(2,3*(j*(j+1)/2+m)+1))
+          koef1=sqrt((j1)/(2*j1+1))*(1/2.0)*(displacement(number_of_layers,3*(j*(j+1)/2+m)-1)+ &
+          displacement(number_of_layers+1,3*(j*(j+1)/2+m)-1))
+          koef2=sqrt((j1+1)/(2*j1+1))*(1/2.0)*(displacement(number_of_layers,3*(j*(j+1)/2+m)+1)+ &
+          displacement(number_of_layers+1,3*(j*(j+1)/2+m)+1))
+          !koef1=sqrt((j1)/(2*j1+1))*(1/2.0)*(displacement(1,3*(j*(j+1)/2+m)-1)+ &
+           !           displacement(2,3*(j*(j+1)/2+m)-1))
+          !koef2=sqrt((j1+1)/(2*j1+1))*(1/2.0)*(displacement(1,3*(j*(j+1)/2+m)+1)+ &
+           !           displacement(2,3*(j*(j+1)/2+m)+1))
           !koeficient(i)=koef1-koef2
           !uu(t+1)=uu(t+1)+dreal(dcmplx(p(i),0)*koeficient(i))*fac
           if (m.eq.0) uu0(t+1) = koef1-koef2
@@ -518,7 +518,7 @@ program Europa_simulation
   real*8, parameter :: delta_t=450
 
   ! Physical parameters for Europa's ice layer
-  real*8, parameter :: radius = 1501000.0d0        ! Radius of Europa in meters
+  real*8, parameter :: radius = 1510000.0d0        ! Radius of Europa in meters
   real*8, parameter :: thickness = 30000.0d0       ! Thickness of ice in meters
   real*8, parameter :: mu = 3.3E9                  ! Shear modulus in Pascal
   real*8, parameter :: eta = 1.0E13                ! Vizkozity in Pascal*s
@@ -532,12 +532,12 @@ program Europa_simulation
   real*8, parameter :: delta_r = thickness / (number_of_layers - 1)  ! Radial distance between layers
 
 
-
   ! Allocate matrices for storing calculations
-  real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
+  complex*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
   complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
   complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-  complex*16 :: posunuti(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+  
+  real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
   complex*16 :: bottom_force(3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
   complex*16 :: volume_force(number_of_layers - 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
 
@@ -565,7 +565,7 @@ program Europa_simulation
   matrix = 0.0d0
   cauchy = 0.0d0
   cauchy_integral = 0.0d0
-  posunuti = 0.0d0
+  displacement = 0.0d0
   bottom_force = 0.0d0
   volume_force = 0.0d0
 
@@ -589,25 +589,9 @@ program Europa_simulation
 
   ! Main simulation loop over time steps, careful to number_of_time_steps - 1
   do t=0,number_of_time_steps-1
+
       ! Calculate the forces at this time step
       call calculate_forces(number_of_layers, t, jmax, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
-
-
-      !!!!!!!!!!!!!
-      ! Testovaci kod
-      volume_force_8(t+1) = (1/2.0)*(volume_force(73,8)+volume_force(74,8))
-      volume_force_14(t+1) = (1/2.0)*(volume_force(73,14)+volume_force(74,14))
-
-      koef1=sqrt((2.0)/(5.0))*bottom_force(8)
-      koef2=sqrt((3.0)/(5.0))*bottom_force(10)
-      bottom_force_0(t+1)= koef1-koef2
-      ksi = (ice_density + delta_rho) * angular_speed**2 * excentricity * radius**2
-      real_bottom_force(t+1) = cmplx(-ksi*sqrt((18.D0*4*datan(1.D0))/(10))*dcos(angular_speed*t*delta_t),0)
-      !!!!!!!!!!!!!
-
-      !print*, bottom_force(8), bottom_force(10)
-
-
 
       ! Loop over each harmonic degree 'j'
       do j=2,jmax
@@ -626,18 +610,14 @@ program Europa_simulation
                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
               end do
 
-              ! Prozatim bez objemove sily a ciste elasticke teleso
-              ! volume_force = 0.0d0
-              ! cauchy_integral = 0.0d0
-
               ! Solve the linear system for the current harmonic order
               call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force,&
-                   bottom_force, cauchy_integral, cauchy, posunuti)
+                   bottom_force, cauchy_integral, cauchy, displacement)
           end do
       end do
 
       ! Calculate and print the radial displacement at the surface
-      call calculate_and_print_surface_radial_displacement(number_of_layers, jmax, t, number_of_time_steps, uu2, uu0, delta_t, posunuti)
+      call calculate_and_print_surface_radial_displacement(number_of_layers, jmax, t, number_of_time_steps, uu2, uu0, delta_t, displacement)
 
       !!!!!!!!!!!!!
       ! Pocitani zahrivani
