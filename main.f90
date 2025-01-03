@@ -46,252 +46,330 @@ SUBROUTINE DPNM(X,N,P)
     RETURN
     END
 
+SUBROUTINE bandec(a,n,m1,m2,np,mp,al,mpl,indx,d)
+    INTEGER m1,m2,mp,mpl,n,np,indx(*)
+    REAL*8 d,a(np,mp),al(np,mpl),TINY
+    PARAMETER (TINY=1.d-20)
+    INTEGER i,j,k,l,mm
+    REAL*8 dum
+    mm=m1+m2+1
+    if(mm.gt.mp.or.m1.gt.mpl.or.n.gt.np) pause 'bad args in bandec'
+    l=m1
+    do 13 i=1,m1
+        do 11 j=m1+2-i,mm
+        a(i,j-l)=a(i,j)
+    11      continue
+        l=l-1
+        do 12 j=mm-l,mm
+        a(i,j)=0d0
+    12      continue
+    13    continue
+    d=1d0
+    l=m1
+    do 18 k=1,n
+        dum=a(k,1)
+        i=k
+        if(l.lt.n)l=l+1
+        do 14 j=k+1,l
+        if(abs(a(j,1)).gt.abs(dum))then
+            dum=a(j,1)
+            i=j
+        endif
+    14      continue
+        indx(k)=i
+        if(dum.eq.0d0) a(k,1)=TINY
+        if(i.ne.k)then
+        d=-d
+        do 15 j=1,mm
+            dum=a(k,j)
+            a(k,j)=a(i,j)
+            a(i,j)=dum
+    15        continue
+        endif
+        do 17 i=k+1,l
+        dum=a(i,1)/a(k,1)
+        al(k,i-k)=dum
+        do 16 j=2,mm
+            a(i,j-1)=a(i,j)-dum*a(k,j)
+    16        continue
+        a(i,mm)=0d0
+    17      continue
+    18    continue
+    return
+    END subroutine bandec
+        
+SUBROUTINE banbks(a,n,m1,m2,np,mp,al,mpl,indx,b)
+    INTEGER m1,m2,mp,mpl,n,np,indx(*)
+    REAL*8 a(np,mp),al(np,mpl),b(*)
+    INTEGER i,k,l,mm
+    REAL*8 dum
+    mm=m1+m2+1
+    if(mm.gt.mp.or.m1.gt.mpl.or.n.gt.np) pause 'bad args in banbks'
+    l=m1
+    do 12 k=1,n
+        i=indx(k)
+        if(i.ne.k)then
+        dum=b(k)
+        b(k)=b(i)
+        b(i)=dum
+        endif
+        if(l.lt.n)l=l+1
+        do 11 i=k+1,l
+        b(i)=b(i)-al(k,i-k)*b(k)
+    11      continue
+    12    continue
+    l=1
+    do 14 i=n,1,-1
+        dum=b(i)
+        do 13 k=2,l
+        dum=dum-a(i,k)*b(k+i-1)
+    13      continue
+        b(i)=dum/a(i,1)
+        if(l.lt.mm) l=l+1
+    14    continue
+    return
+    END subroutine banbks
+
 SUBROUTINE fill_matrix(number_of_layers, matrix, j, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
 
-  INTEGER number_of_layers
-  REAL*8 matrix(6*number_of_layers+2,6*number_of_layers+2), j, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g
-  REAL*8 :: a1, a2, b1, b2, c1, c2, d1, d2, e1, e2, f1, f2, g1, g2, h1, h2, q1, q2, r1, r2, p1, p2, s1, s2
+    INTEGER number_of_layers
+    REAL*8 matrix(6*number_of_layers+2,6*number_of_layers+2), j, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g
+    REAL*8 :: a1, a2, b1, b2, c1, c2, d1, d2, e1, e2, f1, f2, g1, g2, h1, h2, q1, q2, r1, r2, p1, p2, s1, s2
 
-  a1=sqrt((j)/(2*j+1))
-  a2=-(j-1)*a1
-  b1=-sqrt((j+1)/(2*j+1))
-  b2=(j+2)*b1
-  c1=-sqrt((j)/(3*(2*j+1)))
-  c2=(j+1)*c1
-  d1=sqrt((j-1)/(2*j-1))
-  d2=-(j-2)*d1
-  e1=-sqrt(((j+1)*(2*j+3))/(6*(2*j-1)*(2*j+1)))
-  e2=(j+1)*e1
-  f1=sqrt((j+1)/(3*(2*j+1)))
-  f2=-j*f1
-  g1=sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
-  g2=-j*g1
-  h1=-sqrt((j+2)/(2*j+3))
-  h2=(j+3)*h1
-  q1=sqrt((j+1)*(2*j+3)/(6*(2*j-1)*(2*j+1)))
-  q2=-(j-1)*q1
-  r1=-sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
-  r2=(j+2)*r1
-  p1=-sqrt((j-1)/(2*j-1))
-  p2=j*p1
-  s1=sqrt((j+2)/(2*j+3))
-  s2=-(j+1)*s1
+    a1=sqrt((j)/(2*j+1))
+    a2=-(j-1)*a1
+    b1=-sqrt((j+1)/(2*j+1))
+    b2=(j+2)*b1
+    c1=-sqrt((j)/(3*(2*j+1)))
+    c2=(j+1)*c1
+    d1=sqrt((j-1)/(2*j-1))
+    d2=-(j-2)*d1
+    e1=-sqrt(((j+1)*(2*j+3))/(6*(2*j-1)*(2*j+1)))
+    e2=(j+1)*e1
+    f1=sqrt((j+1)/(3*(2*j+1)))
+    f2=-j*f1
+    g1=sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
+    g2=-j*g1
+    h1=-sqrt((j+2)/(2*j+3))
+    h2=(j+3)*h1
+    q1=sqrt((j+1)*(2*j+3)/(6*(2*j-1)*(2*j+1)))
+    q2=-(j-1)*q1
+    r1=-sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
+    r2=(j+2)*r1
+    p1=-sqrt((j-1)/(2*j-1))
+    p2=j*p1
+    s1=sqrt((j+2)/(2*j+3))
+    s2=-(j+1)*s1
 
-  matrix(1,1)=((a2)/(2*radius)-(a1)/(delta_r))
-  matrix(1,2)=((b2)/(2*radius)-(b1)/(delta_r))
-  matrix(1,7)=((a2)/(2*radius)+(a1)/(delta_r))
-  matrix(1,8)=((b2)/(2*radius)+(b1)/(delta_r))
+    matrix(1,1)=((a2)/(2*radius)-(a1)/(delta_r))
+    matrix(1,2)=((b2)/(2*radius)-(b1)/(delta_r))
+    matrix(1,7)=((a2)/(2*radius)+(a1)/(delta_r))
+    matrix(1,8)=((b2)/(2*radius)+(b1)/(delta_r))
 
-  !matrix(2,1)=1/2.0
-  !matrix(2,7)=1/2.0
+    matrix(2,3)=sqrt((j)/(3*(2*j+1)))
+    matrix(2,4)=-sqrt((j-1)/(2*j-1))
+    matrix(2,5)=sqrt(((j+1)*(2*j+3))/(6*(2*j-1)*(2*j+1)))
+    matrix(2,1)=(delta_rho*bottom_g*j)/((2*j+1)*2)
+    matrix(2,7)=(delta_rho*bottom_g*j)/((2*j+1)*2)
+    matrix(2,2)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(2,8)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
 
-  !matrix(3,2)=1/2.0
-  !matrix(3,8)=1/2.0
+    matrix(3,3)=-sqrt((j+1)/(3*(2*j+1)))
+    matrix(3,5)=-sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
+    matrix(3,6)=sqrt((j+2)/(2*j+3))
+    matrix(3,1)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(3,7)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(3,2)=(delta_rho*bottom_g*(j+1))/((2*j+1)*2)
+    matrix(3,8)=(delta_rho*bottom_g*(j+1))/((2*j+1)*2)
 
-  matrix(2,3)=sqrt((j)/(3*(2*j+1)))
-  matrix(2,4)=-sqrt((j-1)/(2*j-1))
-  matrix(2,5)=sqrt(((j+1)*(2*j+3))/(6*(2*j-1)*(2*j+1)))
-  matrix(2,1)=(delta_rho*bottom_g*j)/((2*j+1)*2)
-  matrix(2,7)=(delta_rho*bottom_g*j)/((2*j+1)*2)
-  matrix(2,2)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
-  matrix(2,8)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(4,1)=((p2)/(2*radius)-(p1)/(delta_r))
+    matrix(4,7)=((p2)/(2*radius)+(p1)/(delta_r))
+    matrix(4,4)=1.0/(2*mu)
 
-  matrix(3,3)=-sqrt((j+1)/(3*(2*j+1)))
-  matrix(3,5)=-sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
-  matrix(3,6)=sqrt((j+2)/(2*j+3))
-  matrix(3,1)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
-  matrix(3,7)=-(delta_rho*bottom_g*sqrt(j*(j+1)))/((2*j+1)*2)
-  matrix(3,2)=(delta_rho*bottom_g*(j+1))/((2*j+1)*2)
-  matrix(3,8)=(delta_rho*bottom_g*(j+1))/((2*j+1)*2)
+    matrix(5,1)=((q2)/(2*radius)-(q1)/(delta_r))
+    matrix(5,2)=((r2)/(2*radius)-(r1)/(delta_r))
+    matrix(5,5)=1.0/(2*mu)
+    matrix(5,7)=((q2)/(2*radius)+(q1)/(delta_r))
+    matrix(5,8)=((r2)/(2*radius)+(r1)/(delta_r))
 
-  matrix(4,1)=((p2)/(2*radius)-(p1)/(delta_r))
-  matrix(4,7)=((p2)/(2*radius)+(p1)/(delta_r))
-  matrix(4,4)=1.0/(2*mu)
-
-  matrix(5,1)=((q2)/(2*radius)-(q1)/(delta_r))
-  matrix(5,2)=((r2)/(2*radius)-(r1)/(delta_r))
-  matrix(5,5)=1.0/(2*mu)
-  matrix(5,7)=((q2)/(2*radius)+(q1)/(delta_r))
-  matrix(5,8)=((r2)/(2*radius)+(r1)/(delta_r))
-
-  matrix(6,2)=((s2)/(2*radius)-(s1)/(delta_r))
-  matrix(6,8)=((s2)/(2*radius)+(s1)/(delta_r))
-  matrix(6,6)=1.0/(2*mu)
+    matrix(6,2)=((s2)/(2*radius)-(s1)/(delta_r))
+    matrix(6,8)=((s2)/(2*radius)+(s1)/(delta_r))
+    matrix(6,6)=1.0/(2*mu)
 
 
-  do i=2,number_of_layers
+    do i=2,number_of_layers
 
-      matrix(6*(i-1)+1,6*(i-1)+1)=((a2)/(2*(radius+(i-1.0)*delta_r))-(a1)/(delta_r))
-      matrix(6*(i-1)+1,6*(i-1)+2)=((b2)/(2*(radius+(i-1.0)*delta_r))-(b1)/(delta_r))
-      matrix(6*(i-1)+1,6*i+1)=((a2)/(2*(radius+(i-1.0)*delta_r))+(a1)/(delta_r))
-      matrix(6*(i-1)+1,6*i+2)=((b2)/(2*(radius+(i-1.0)*delta_r))+(b1)/(delta_r))
+        matrix(6*(i-1)+1,6*(i-1)+1)=((a2)/(2*(radius+(i-1.0)*delta_r))-(a1)/(delta_r))
+        matrix(6*(i-1)+1,6*(i-1)+2)=((b2)/(2*(radius+(i-1.0)*delta_r))-(b1)/(delta_r))
+        matrix(6*(i-1)+1,6*i+1)=((a2)/(2*(radius+(i-1.0)*delta_r))+(a1)/(delta_r))
+        matrix(6*(i-1)+1,6*i+2)=((b2)/(2*(radius+(i-1.0)*delta_r))+(b1)/(delta_r))
 
-      matrix(6*(i-1)+2,6*(i-1)-3)=((c2)/(2*(radius+(i-1.5)*delta_r))-(c1)/(delta_r))
-      matrix(6*(i-1)+2,6*(i-1)-2)=((d2)/(2*(radius+(i-1.5)*delta_r))-(d1)/(delta_r))
-      matrix(6*(i-1)+2,6*(i-1)-1)=((e2)/(2*(radius+(i-1.5)*delta_r))-(e1)/(delta_r))
-      matrix(6*(i-1)+2,6*(i-1)+3)=((c2)/(2*(radius+(i-1.5)*delta_r))+(c1)/(delta_r))
-      matrix(6*(i-1)+2,6*(i-1)+4)=((d2)/(2*(radius+(i-1.5)*delta_r))+(d1)/(delta_r))
-      matrix(6*(i-1)+2,6*(i-1)+5)=((e2)/(2*(radius+(i-1.5)*delta_r))+(e1)/(delta_r))
+        matrix(6*(i-1)+2,6*(i-1)-3)=((c2)/(2*(radius+(i-1.5)*delta_r))-(c1)/(delta_r))
+        matrix(6*(i-1)+2,6*(i-1)-2)=((d2)/(2*(radius+(i-1.5)*delta_r))-(d1)/(delta_r))
+        matrix(6*(i-1)+2,6*(i-1)-1)=((e2)/(2*(radius+(i-1.5)*delta_r))-(e1)/(delta_r))
+        matrix(6*(i-1)+2,6*(i-1)+3)=((c2)/(2*(radius+(i-1.5)*delta_r))+(c1)/(delta_r))
+        matrix(6*(i-1)+2,6*(i-1)+4)=((d2)/(2*(radius+(i-1.5)*delta_r))+(d1)/(delta_r))
+        matrix(6*(i-1)+2,6*(i-1)+5)=((e2)/(2*(radius+(i-1.5)*delta_r))+(e1)/(delta_r))
 
-      matrix(6*(i-1)+3,6*(i-1)-3)=((f2)/(2*(radius+(i-1.5)*delta_r))-(f1)/(delta_r))
-      matrix(6*(i-1)+3,6*(i-1)-1)=((g2)/(2*(radius+(i-1.5)*delta_r))-(g1)/(delta_r))
-      matrix(6*(i-1)+3,6*(i-1))=((h2)/(2*(radius+(i-1.5)*delta_r))-(h1)/(delta_r))
-      matrix(6*(i-1)+3,6*(i-1)+3)=((f2)/(2*(radius+(i-1.5)*delta_r))+(f1)/(delta_r))
-      matrix(6*(i-1)+3,6*(i-1)+5)=((g2)/(2*(radius+(i-1.5)*delta_r))+(g1)/(delta_r))
-      matrix(6*(i-1)+3,6*i)=((h2)/(2*(radius+(i-1.5)*delta_r))+(h1)/(delta_r))
+        matrix(6*(i-1)+3,6*(i-1)-3)=((f2)/(2*(radius+(i-1.5)*delta_r))-(f1)/(delta_r))
+        matrix(6*(i-1)+3,6*(i-1)-1)=((g2)/(2*(radius+(i-1.5)*delta_r))-(g1)/(delta_r))
+        matrix(6*(i-1)+3,6*(i-1))=((h2)/(2*(radius+(i-1.5)*delta_r))-(h1)/(delta_r))
+        matrix(6*(i-1)+3,6*(i-1)+3)=((f2)/(2*(radius+(i-1.5)*delta_r))+(f1)/(delta_r))
+        matrix(6*(i-1)+3,6*(i-1)+5)=((g2)/(2*(radius+(i-1.5)*delta_r))+(g1)/(delta_r))
+        matrix(6*(i-1)+3,6*i)=((h2)/(2*(radius+(i-1.5)*delta_r))+(h1)/(delta_r))
 
-      matrix(6*(i-1)+4,6*(i-1)+1)=((p2)/(2*(radius+(i-1.0)*delta_r))-(p1)/(delta_r))
-      matrix(6*(i-1)+4,6*i+1)=((p2)/(2*(radius+(i-1.0)*delta_r))+(p1)/(delta_r))
-      matrix(6*(i-1)+4,6*(i-1)+4)=1.0/(2*mu)
+        matrix(6*(i-1)+4,6*(i-1)+1)=((p2)/(2*(radius+(i-1.0)*delta_r))-(p1)/(delta_r))
+        matrix(6*(i-1)+4,6*i+1)=((p2)/(2*(radius+(i-1.0)*delta_r))+(p1)/(delta_r))
+        matrix(6*(i-1)+4,6*(i-1)+4)=1.0/(2*mu)
 
-      matrix(6*(i-1)+5,6*(i-1)+1)=((q2)/(2*(radius+(i-1.0)*delta_r))-(q1)/(delta_r))
-      matrix(6*(i-1)+5,6*(i-1)+2)=((r2)/(2*(radius+(i-1.0)*delta_r))-(r1)/(delta_r))
-      matrix(6*(i-1)+5,6*i+1)=((q2)/(2*(radius+(i-1.0)*delta_r))+(q1)/(delta_r))
-      matrix(6*(i-1)+5,6*i+2)=((r2)/(2*(radius+(i-1.0)*delta_r))+(r1)/(delta_r))
-      matrix(6*(i-1)+5,6*(i-1)+5)=1.0/(2*mu)
+        matrix(6*(i-1)+5,6*(i-1)+1)=((q2)/(2*(radius+(i-1.0)*delta_r))-(q1)/(delta_r))
+        matrix(6*(i-1)+5,6*(i-1)+2)=((r2)/(2*(radius+(i-1.0)*delta_r))-(r1)/(delta_r))
+        matrix(6*(i-1)+5,6*i+1)=((q2)/(2*(radius+(i-1.0)*delta_r))+(q1)/(delta_r))
+        matrix(6*(i-1)+5,6*i+2)=((r2)/(2*(radius+(i-1.0)*delta_r))+(r1)/(delta_r))
+        matrix(6*(i-1)+5,6*(i-1)+5)=1.0/(2*mu)
 
-      matrix(6*(i-1)+6,6*(i-1)+2)=((s2)/(2*(radius+(i-1.0)*delta_r))-(s1)/(delta_r))
-      matrix(6*(i-1)+6,6*i+2)=((s2)/(2*(radius+(i-1.0)*delta_r))+(s1)/(delta_r))
-      matrix(6*(i-1)+6,6*i)=1.0/(2*mu)
+        matrix(6*(i-1)+6,6*(i-1)+2)=((s2)/(2*(radius+(i-1.0)*delta_r))-(s1)/(delta_r))
+        matrix(6*(i-1)+6,6*i+2)=((s2)/(2*(radius+(i-1.0)*delta_r))+(s1)/(delta_r))
+        matrix(6*(i-1)+6,6*i)=1.0/(2*mu)
 
-  end do
+    end do
 
-  matrix(6*number_of_layers+1,6*number_of_layers-3)=-sqrt((j)/(3*(2*j+1)))
-  matrix(6*number_of_layers+1,6*number_of_layers-2)=sqrt((j-1)/(2*j-1))
-  matrix(6*number_of_layers+1,6*number_of_layers-1)=-sqrt(((j+1)*(2*j+3))/(6*(2*j-1)*(2*j+1)))
-  matrix(6*number_of_layers+1,6*number_of_layers-5)=(ice_density*surface_g*j)/((2*j+1)*2)
-  matrix(6*number_of_layers+1,6*number_of_layers+1)=(ice_density*surface_g*j)/((2*j+1)*2)
-  matrix(6*number_of_layers+1,6*number_of_layers-4)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
-  matrix(6*number_of_layers+1,6*number_of_layers+2)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(6*number_of_layers+1,6*number_of_layers-3)=-sqrt((j)/(3*(2*j+1)))
+    matrix(6*number_of_layers+1,6*number_of_layers-2)=sqrt((j-1)/(2*j-1))
+    matrix(6*number_of_layers+1,6*number_of_layers-1)=-sqrt(((j+1)*(2*j+3))/(6*(2*j-1)*(2*j+1)))
+    matrix(6*number_of_layers+1,6*number_of_layers-5)=(ice_density*surface_g*j)/((2*j+1)*2)
+    matrix(6*number_of_layers+1,6*number_of_layers+1)=(ice_density*surface_g*j)/((2*j+1)*2)
+    matrix(6*number_of_layers+1,6*number_of_layers-4)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(6*number_of_layers+1,6*number_of_layers+2)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
 
-  matrix(6*number_of_layers+2,6*number_of_layers-3)=sqrt((j+1)/(3*(2*j+1)))
-  matrix(6*number_of_layers+2,6*number_of_layers-1)=sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
-  matrix(6*number_of_layers+2,6*number_of_layers)=-sqrt((j+2)/(2*j+3))
-  matrix(6*number_of_layers+2,6*number_of_layers-5)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
-  matrix(6*number_of_layers+2,6*number_of_layers+1)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
-  matrix(6*number_of_layers+2,6*number_of_layers-4)=(ice_density*surface_g*(j+1))/((2*j+1)*2)
-  matrix(6*number_of_layers+2,6*number_of_layers+2)=(ice_density*surface_g*(j+1))/((2*j+1)*2)
+    matrix(6*number_of_layers+2,6*number_of_layers-3)=sqrt((j+1)/(3*(2*j+1)))
+    matrix(6*number_of_layers+2,6*number_of_layers-1)=sqrt((j*(2*j-1))/(6*(2*j+1)*(2*j+3)))
+    matrix(6*number_of_layers+2,6*number_of_layers)=-sqrt((j+2)/(2*j+3))
+    matrix(6*number_of_layers+2,6*number_of_layers-5)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(6*number_of_layers+2,6*number_of_layers+1)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
+    matrix(6*number_of_layers+2,6*number_of_layers-4)=(ice_density*surface_g*(j+1))/((2*j+1)*2)
+    matrix(6*number_of_layers+2,6*number_of_layers+2)=(ice_density*surface_g*(j+1))/((2*j+1)*2)
 
-END SUBROUTINE
+    END SUBROUTINE
 
-subroutine calculate_forces(number_of_layers, t, jmax, volume_force, bottom_force, &
+SUBROUTINE calculate_forces(number_of_layers, t, jmax, volume_force, bottom_force, &
               radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
-  ! subroutine calculate_forces computes the volume and bottom forces
-  ! applied on Europa's ice shell due to tidal deformations.
-  !
-  ! Arguments:
-  !   number_of_layers - the number of layers in the simulation
-  !   t - the current time step index
-  !   jmax - maximum degree of spherical harmonics
-  !   volume_force - array to hold the volume forces computed
-  !   bottom_force - array to hold the bottom forces computed
-  !   radius - the radius of Europa
-  !   delta_r - the change in radius per layer
-  !   angular_speed - angular speed of Europa's orbit
-  !   delta_t - the time increment per step
-  !   ice_density - the density of Europa's ice layer
-  !   excentricity - the orbital excentricity of Europa
+    ! subroutine calculate_forces computes the volume and bottom forces
+    ! applied on Europa's ice shell due to tidal deformations.
+    !
+    ! Arguments:
+    !   number_of_layers - the number of layers in the simulation
+    !   t - the current time step index
+    !   jmax - maximum degree of spherical harmonics
+    !   volume_force - array to hold the volume forces computed
+    !   bottom_force - array to hold the bottom forces computed
+    !   radius - the radius of Europa
+    !   delta_r - the change in radius per layer
+    !   angular_speed - angular speed of Europa's orbit
+    !   delta_t - the time increment per step
+    !   ice_density - the density of Europa's ice layer
+    !   excentricity - the orbital excentricity of Europa
 
-  ! Declare the types of the arguments
-  integer, intent(in) :: number_of_layers, t, jmax
-  complex*16, intent(out) :: volume_force(number_of_layers-1, 2), bottom_force(4)
-  real*8, intent(in) :: radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity
+    ! Declare the types of the arguments
+    integer, intent(in) :: number_of_layers, t, jmax
+    complex*16, intent(out) :: volume_force(number_of_layers-1, 2), bottom_force(4)
+    real*8, intent(in) :: radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity
 
-  ! Declare local variables
-  real*8 :: konst, real_, imag_, t_, ksi
-  integer :: i
+    ! Declare local variables
+    real*8 :: konst, real_, imag_, t_, ksi
+    integer :: i
 
-  t_ = dble(t)
+    t_ = dble(t)
 
-  ! Compute a constant factor used in the force calculations
-  konst=ice_density*angular_speed*angular_speed*excentricity
+    ! Compute a constant factor used in the force calculations
+    konst=ice_density*angular_speed*angular_speed*excentricity
 
-  ! Loop over each layer to compute the volume forces
-  do i=1,number_of_layers-1
-      ksi=konst*(radius+(i-1/2.0)*delta_r)
-      volume_force(i,1) = dcmplx(-ksi*sqrt(18*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t), 0.D0)
+    ! Loop over each layer to compute the volume forces
+    do i=1,number_of_layers-1
+        ksi=konst*(radius+(i-1/2.0)*delta_r)
+        volume_force(i,1) = dcmplx(-ksi*sqrt(18*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t), 0.D0)
 
-      real_=ksi*sqrt(27*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t)
-      imag_=-ksi*sqrt(48*4.D0*datan(1.D0))*dsin(angular_speed*t_*delta_t)!<
-      volume_force(i,2)=dcmplx(real_,imag_)
-  end do
+        real_=ksi*sqrt(27*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t)
+        imag_=-ksi*sqrt(48*4.D0*datan(1.D0))*dsin(angular_speed*t_*delta_t)!<
+        volume_force(i,2)=dcmplx(real_,imag_)
+    end do
 
-  ! Compute a modified constant factor for bottom force calculation
-  ksi = (ice_density + delta_rho) * angular_speed**2 * excentricity * radius**2
+    ! Compute a modified constant factor for bottom force calculation
+    ksi = (ice_density + delta_rho) * angular_speed**2 * excentricity * radius**2
 
-  ! Compute the bottom forces at specific indices
-  bottom_force(1)=dcmplx(-ksi*sqrt((18*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
-  bottom_force(2)=dcmplx(ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
+    ! Compute the bottom forces at specific indices
+    bottom_force(1)=dcmplx(-ksi*sqrt((18*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
+    bottom_force(2)=dcmplx(ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
 
-  real_=ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t)
-  imag_=-ksi*sqrt((48*4.D0*datan(1.D0))/(25))*dsin(angular_speed*t_*delta_t)
-  bottom_force(3)=dcmplx(real_,imag_)
+    real_=ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t)
+    imag_=-ksi*sqrt((48*4.D0*datan(1.D0))/(25))*dsin(angular_speed*t_*delta_t)
+    bottom_force(3)=dcmplx(real_,imag_)
 
-  real_=-ksi*sqrt((81*4.D0*datan(1.D0))/(50))*dcos(angular_speed*t_*delta_t)
-  imag_=ksi*sqrt((72*4.D0*datan(1.D0))/(25))*dsin(angular_speed*t_*delta_t)
-  bottom_force(4)=dcmplx(real_,imag_)
+    real_=-ksi*sqrt((81*4.D0*datan(1.D0))/(50))*dcos(angular_speed*t_*delta_t)
+    imag_=ksi*sqrt((72*4.D0*datan(1.D0))/(25))*dsin(angular_speed*t_*delta_t)
+    bottom_force(4)=dcmplx(real_,imag_)
 
-end subroutine
+    end subroutine
 
 subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
          volume_force, bottom_force, cauchy_integral, cauchy, displacement)
-  implicit none
+    implicit none
 
-  integer, intent(in) :: number_of_layers, jmax, j, m
-  real*8, intent(in) :: matrix(6*number_of_layers+2,6*number_of_layers+2)
-  complex*16, intent(in) :: volume_force(number_of_layers-1,3*(jmax*(jmax+1)/2+jmax)+1), &
+    integer, intent(in) :: number_of_layers, jmax, j, m
+    real*8, intent(in) :: matrix(6*number_of_layers+2,6*number_of_layers+2)
+    complex*16, intent(in) :: volume_force(number_of_layers-1,3*(jmax*(jmax+1)/2+jmax)+1), &
                         bottom_force(3*(jmax*(jmax+1)/2+jmax)+1), &
                         cauchy_integral(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3)
-  complex*16, intent(inout) :: cauchy(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3), &
-  displacement(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1)
+    complex*16, intent(inout) :: cauchy(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3), &
+    displacement(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1)
 
-  ! Declare workspace matrices and vectors with fixed bounds.
-  real*8 :: A(1000,1000), AL(1000,1000)
-  real*8 :: yr(6*number_of_layers+2), yi(6*number_of_layers+2), d
+    ! Declare workspace matrices and vectors with fixed bounds.
+    real*8 :: A(1000,1000), AL(1000,1000)
+    real*8 :: yr(6*number_of_layers+2), yi(6*number_of_layers+2), d
 
-  ! Declare integer variables for indexing and dimensioning purposes.
-  integer :: i, k, n, m1, m2, np, mp, mpl
+    ! Declare integer variables for indexing and dimensioning purposes.
+    integer :: i, k, n, m1, m2, np, mp, mpl
 
-  ! Allocate the index array for the LU decomposition.
-  integer, allocatable :: INDX(:)
+    ! Allocate the index array for the LU decomposition.
+    integer, allocatable :: INDX(:)
 
-  ! Initialize the real and imaginary parts of the solution vectors.
-  yr = 0.0d0
-  yi=0.0d0
+    ! Initialize the real and imaginary parts of the solution vectors.
+    yr = 0.0d0
+    yi=0.0d0
 
-  ! Set the dimensions and bandwidths for the matrix A.
-  n = 6*number_of_layers+2  ! Dimension of the matrix B.
-  m1 = 7  ! Number of sub-diagonals in matrix B.
-  m2 = 7  ! Number of super-diagonals in matrix B.
-  np = 1000  ! Number of rows in the matrix A, which holds the band of matrix B.
-  mp = 1000  ! Number of columns in the matrix A.
-  mpl = 1000  ! Number of columns in the matrix AL (auxiliary matrix).
+    ! Set the dimensions and bandwidths for the matrix A.
+    n = 6*number_of_layers+2  ! Dimension of the matrix B.
+    m1 = 7  ! Number of sub-diagonals in matrix B.
+    m2 = 7  ! Number of super-diagonals in matrix B.
+    np = 1000  ! Number of rows in the matrix A, which holds the band of matrix B.
+    mp = 1000  ! Number of columns in the matrix A.
+    mpl = 1000  ! Number of columns in the matrix AL (auxiliary matrix).
 
-  ! Initialize the band matrix A to zero before populating with values from 'matrix'.
-  do i = 1, n
-      do k = 1, m1 + m2 + 1
-          A(i, k) = 0d0
-      end do
-  end do
+    ! Initialize the band matrix A to zero before populating with values from 'matrix'.
+    do i = 1, n
+        do k = 1, m1 + m2 + 1
+            A(i, k) = 0d0
+        end do
+    end do
 
 
-  ! Populate the band matrix A from 'matrix'.
-  do i = 1, n
-      do k = 1, m1 + m2 + 1
-          if (i + k - m1 - 1 > 0 .and. i + k - m1 - 1 <= n) then
-              A(i, k) = matrix(i, i + k - m1 - 1)
-          endif
-      end do
-  end do
+    ! Populate the band matrix A from 'matrix'.
+    do i = 1, n
+        do k = 1, m1 + m2 + 1
+            if (i + k - m1 - 1 > 0 .and. i + k - m1 - 1 <= n) then
+                A(i, k) = matrix(i, i + k - m1 - 1)
+            endif
+        end do
+    end do
 
-  ! Allocate the index array for LU decomposition.
-  ALLOCATE(INDX(n))
+    ! Allocate the index array for LU decomposition.
+    ALLOCATE(INDX(n))
 
-  ! Perform LU decomposition on the band matrix A.
-  call bandec (A, n, m1, m2, np, mp, AL, mpl, INDX, d)
+    ! Perform LU decomposition on the band matrix A.
+    call bandec (A, n, m1, m2, np, mp, AL, mpl, INDX, d)
 
-  ! Prepare the right-hand side vector from 'volume_force' and 'bottom_force'.
-  if (j == 2) then
+    ! Prepare the right-hand side vector from 'volume_force' and 'bottom_force'.
+    if (j == 2) then
     select case (m)
         case (0)
             do i = 1, number_of_layers - 1
@@ -303,10 +381,10 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
                 yi(6 * i + 2) = -dimag(volume_force(i, 2))
             end do
     end select
-end if
+    end if
 
-  ! Set the first two elements from 'bottom_force'.
-if (j == 2) then
+    ! Set the first two elements from 'bottom_force'.
+    if (j == 2) then
     select case (m)
         case (0)
             yr(2) = dreal(bottom_force(1))
@@ -317,350 +395,185 @@ if (j == 2) then
             yr(3) = dreal(bottom_force(4))
             yi(3) = dimag(bottom_force(4))
     end select
-end if
+    end if
 
-  do i = 1, number_of_layers
-      yr(i*6-2) = yr(i*6-2) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 7))
-      yr(i*6-1) = yr(i*6-1) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 5))
-      yr(i*6) = yr(i*6) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 3))
-      yi(i*6-2) = yi(i*6-2) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 7))
-      yi(i*6-1) = yi(i*6-1) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 5))
-      yi(i*6) = yi(i*6) +dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 3))
-  end do
-
-
-  ! Solve the system for the real and imaginary parts.
-  call banbks(A, n, m1, m2, np, mp, AL, mpl, INDX, yr)  ! Solve for real part.
-  call banbks(A, n, m1, m2, np, mp, AL, mpl, INDX, yi)  ! Solve for imaginary part.
-
-  ! Deallocate the index array.
-  DEALLOCATE(INDX)
-
-  ! Store the solution into 'displacement' and 'cauchy' arrays.
-  do i = 1, number_of_layers
-    displacement(i, 3 * ((j * (j + 1)) / 2 + m) - 1) = cmplx(yr(6 * (i - 1) + 1), yi(6 * (i - 1) + 1))
-    displacement(i, 3 * ((j * (j + 1)) / 2 + m) + 1) = cmplx(yr(6 * (i - 1) + 2), yi(6 * (i - 1) + 2))
-      cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 7) = cmplx(yr(6 * (i - 1) + 4), yi(6 * (i - 1) + 4))
-      cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 5) = cmplx(yr(6 * (i - 1) + 5), yi(6 * (i - 1) + 5))
-      cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 3) = cmplx(yr(6 * (i - 1) + 6), yi(6 * (i - 1) + 6))
-  end do
-
-  ! Store the solution for the last layer into 'displacement'.
-  displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) - 1) = cmplx(yr(6 * number_of_layers + 1),&
-                                                                      yi(6 * number_of_layers + 1))
-                                                                      displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) + 1) = cmplx(yr(6 * number_of_layers + 2),&
-                                                                      yi(6 * number_of_layers + 2))
+    do i = 1, number_of_layers
+        yr(i*6-2) = yr(i*6-2) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 7))
+        yr(i*6-1) = yr(i*6-1) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 5))
+        yr(i*6) = yr(i*6) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 3))
+        yi(i*6-2) = yi(i*6-2) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 7))
+        yi(i*6-1) = yi(i*6-1) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 5))
+        yi(i*6) = yi(i*6) +dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 3))
+    end do
 
 
-!!!!!!
-! Tady ukladam vysledky do souboru
-  if (j==2) then
-      if (m==0) then
-      open(4, file = 'displacement.dat')
-          do i=1, number_of_layers+1
-             write(4,*) 76000 + 800*(i-3.0/2.0), real(displacement(i, 8)), real(displacement(i, 10))
-          end do
-         close(4)
-          open(5, file = 'napeti.dat')
-          do i=1, number_of_layers
-              write(5,*) 76000 + 800*(i-1), yr(6 * (i - 1) + 3), yr(6 * (i - 1) + 4), yr(6 * (i - 1) + 5), yr(6 * (i - 1) + 6)
-          end do
-          close(5)
-     end if
-  end if
+    ! Solve the system for the real and imaginary parts.
+    call banbks(A, n, m1, m2, np, mp, AL, mpl, INDX, yr)  ! Solve for real part.
+    call banbks(A, n, m1, m2, np, mp, AL, mpl, INDX, yi)  ! Solve for imaginary part.
 
-!!!!!!!!
+    ! Deallocate the index array.
+    DEALLOCATE(INDX)
 
-end subroutine
+    ! Store the solution into 'displacement' and 'cauchy' arrays.
+    do i = 1, number_of_layers
+    displacement(i, 3 * ((j * (j + 1)) / 2 + m) - 1) = dcmplx(yr(6 * (i - 1) + 1), yi(6 * (i - 1) + 1))
+    displacement(i, 3 * ((j * (j + 1)) / 2 + m) + 1) = dcmplx(yr(6 * (i - 1) + 2), yi(6 * (i - 1) + 2))
+        cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 7) = dcmplx(yr(6 * (i - 1) + 4), yi(6 * (i - 1) + 4))
+        cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 5) = dcmplx(yr(6 * (i - 1) + 5), yi(6 * (i - 1) + 5))
+        cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 3) = dcmplx(yr(6 * (i - 1) + 6), yi(6 * (i - 1) + 6))
+    end do
 
-SUBROUTINE bandec(a,n,m1,m2,np,mp,al,mpl,indx,d)
-INTEGER m1,m2,mp,mpl,n,np,indx(*)
-REAL*8 d,a(np,mp),al(np,mpl),TINY
-PARAMETER (TINY=1.d-20)
-INTEGER i,j,k,l,mm
-REAL*8 dum
-mm=m1+m2+1
-if(mm.gt.mp.or.m1.gt.mpl.or.n.gt.np) pause 'bad args in bandec'
-l=m1
-do 13 i=1,m1
-  do 11 j=m1+2-i,mm
-    a(i,j-l)=a(i,j)
-11      continue
-  l=l-1
-  do 12 j=mm-l,mm
-    a(i,j)=0d0
-12      continue
-13    continue
-d=1d0
-l=m1
-do 18 k=1,n
-  dum=a(k,1)
-  i=k
-  if(l.lt.n)l=l+1
-  do 14 j=k+1,l
-    if(abs(a(j,1)).gt.abs(dum))then
-      dum=a(j,1)
-      i=j
-    endif
-14      continue
-  indx(k)=i
-  if(dum.eq.0d0) a(k,1)=TINY
-  if(i.ne.k)then
-    d=-d
-    do 15 j=1,mm
-      dum=a(k,j)
-      a(k,j)=a(i,j)
-      a(i,j)=dum
-15        continue
-  endif
-  do 17 i=k+1,l
-    dum=a(i,1)/a(k,1)
-    al(k,i-k)=dum
-    do 16 j=2,mm
-      a(i,j-1)=a(i,j)-dum*a(k,j)
-16        continue
-    a(i,mm)=0d0
-17      continue
-18    continue
-return
-END subroutine bandec
-
-SUBROUTINE banbks(a,n,m1,m2,np,mp,al,mpl,indx,b)
-INTEGER m1,m2,mp,mpl,n,np,indx(*)
-REAL*8 a(np,mp),al(np,mpl),b(*)
-INTEGER i,k,l,mm
-REAL*8 dum
-mm=m1+m2+1
-if(mm.gt.mp.or.m1.gt.mpl.or.n.gt.np) pause 'bad args in banbks'
-l=m1
-do 12 k=1,n
-  i=indx(k)
-  if(i.ne.k)then
-    dum=b(k)
-    b(k)=b(i)
-    b(i)=dum
-  endif
-  if(l.lt.n)l=l+1
-  do 11 i=k+1,l
-    b(i)=b(i)-al(k,i-k)*b(k)
-11      continue
-12    continue
-l=1
-do 14 i=n,1,-1
-  dum=b(i)
-  do 13 k=2,l
-    dum=dum-a(i,k)*b(k+i-1)
-13      continue
-  b(i)=dum/a(i,1)
-  if(l.lt.mm) l=l+1
-14    continue
-return
-END subroutine banbks
-
-subroutine calculate_and_print_surface_radial_displacement(number_of_layers, jmax, t, number_of_time_steps, uu2, uu0, delta_t, displacement)
-      integer number_of_layers, t, jmax, number_of_time_steps
-      real*8 delta_t
-      complex*16 displacement(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1), uu2(number_of_time_steps), uu0(number_of_time_steps),&
-       koef1, koef2
-      integer j, m, th, ph, i
-      real*8 fac, x, thr, phr, j1, p(1000), xm
-      complex*8 :: koeficient(30)
+    ! Store the solution for the last layer into 'displacement'.
+    displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) - 1) = dcmplx(yr(6 * number_of_layers + 1),&
+                                                                        yi(6 * number_of_layers + 1))
+                                                                        displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m) + 1) = dcmplx(yr(6 * number_of_layers + 2),&
+                                                                        yi(6 * number_of_layers + 2))
 
 
-      th=90 ! zemepisne souradnice bodu, kde chceme pocitat hodnotu
-      ph=0
-      thr=th*datan(1d0)/45d0 ! prepocet na radiany
-      phr=ph*datan(1d0)/45d0
-
-      x=dcos(thr) ! k vypoctu PLF potrebujeme cos(th)
-
-  !    vypocet PLF v bode cos(th); hodnoty ulozeny v jednorozmernem poli p
-      call DPNM(x,jmax,p)
-
-  !   vypocet SH funkci a soucet rady v bode th,ph
-      do j=2,jmax
-          do m=0,j
-          j1=real(j)
-          xm=dble(m)
-          fac=2d0
-          if(m.eq.0) fac=1d0
-          i=j*(j+1)/2+m+1 ! sdruzeny index
-          koef1=sqrt((j1)/(2*j1+1))*(1/2.0)*(displacement(number_of_layers,3*(j*(j+1)/2+m)-1)+ &
-          displacement(number_of_layers+1,3*(j*(j+1)/2+m)-1))
-          koef2=sqrt((j1+1)/(2*j1+1))*(1/2.0)*(displacement(number_of_layers,3*(j*(j+1)/2+m)+1)+ &
-          displacement(number_of_layers+1,3*(j*(j+1)/2+m)+1))
-          !koef1=sqrt((j1)/(2*j1+1))*(1/2.0)*(displacement(1,3*(j*(j+1)/2+m)-1)+ &
-           !           displacement(2,3*(j*(j+1)/2+m)-1))
-          !koef2=sqrt((j1+1)/(2*j1+1))*(1/2.0)*(displacement(1,3*(j*(j+1)/2+m)+1)+ &
-           !           displacement(2,3*(j*(j+1)/2+m)+1))
-          !koeficient(i)=koef1-koef2
-          !uu(t+1)=uu(t+1)+dreal(dcmplx(p(i),0)*koeficient(i))*fac
-          if (m.eq.0) uu0(t+1) = koef1-koef2
-          if (m.eq.2) uu2(t+1) = koef1-koef2
-          enddo
-
-      end do
-
-      print*, t*(delta_t)/3600, uu0(t+1), uu2(t+1)
-end subroutine
+    end subroutine
 
 ! This program simulates the deformation of Jupiter's moon Europa
 program Europa_simulation
-  implicit none   ! Require all variables to be explicitly declared
+    implicit none   ! Require all variables to be explicitly declared
 
-  ! Constants for the simulation
-  integer, parameter :: number_of_layers=101
-  integer, parameter :: jmax=2
-  integer, parameter :: number_of_time_steps=1000
-  real*8, parameter :: delta_t=450
+    ! Constants for the simulation
+    integer, parameter :: number_of_layers=101
+    integer, parameter :: jmax=2
+    integer, parameter :: number_of_time_steps=1000
+    real*8, parameter :: delta_t=450
 
-  ! Physical parameters for Europa's ice layer
-  real*8, parameter :: radius = 1510000.0d0        ! Radius of Europa in meters
-  real*8, parameter :: thickness = 30000.0d0       ! Thickness of ice in meters
-  real*8, parameter :: mu = 3.3E9                  ! Shear modulus in Pascal
-  real*8, parameter :: eta = 1.0E13                ! Vizkozity in Pascal*s
-  real*8, parameter :: surface_g = 1.314           ! Surface gravity in m/s^2
-  real*8, parameter :: bottom_g = 1.314            ! Bottom gravity in m/s^2 (same as surface gravity)
-  real*8, parameter :: ice_density = 970.0d0       ! Density of ice in kg/m^3
-  real*8, parameter :: delta_rho = 30.0d0          ! Density difference in kg/m^3
-  real*8, parameter :: angular_speed = 2.0478E-5   ! Angular speed in rad/s
-  real*8, parameter :: excentricity = 0.009        ! Eccentricity of Europa's orbit
+    ! Physical parameters for Europa's ice layer
+    real*8, parameter :: radius = 1510000.0d0        ! Radius of Europa in meters
+    real*8, parameter :: thickness = 30000.0d0       ! Thickness of ice in meters
+    real*8, parameter :: mu = 3.3E9                  ! Shear modulus in Pascal
+    real*8, parameter :: eta = 1.0E13                ! Vizkozity in Pascal*s
+    real*8, parameter :: surface_g = 1.314           ! Surface gravity in m/s^2
+    real*8, parameter :: bottom_g = 1.314            ! Bottom gravity in m/s^2 (same as surface gravity)
+    real*8, parameter :: ice_density = 970.0d0       ! Density of ice in kg/m^3
+    real*8, parameter :: delta_rho = 30.0d0          ! Density difference in kg/m^3
+    real*8, parameter :: angular_speed = 2.0478E-5   ! Angular speed in rad/s
+    real*8, parameter :: excentricity = 0.009        ! Eccentricity of Europa's orbit
 
-  real*8, parameter :: delta_r = thickness / (number_of_layers - 1)  ! Radial distance between layers
-
-
-  ! Allocate matrices for storing calculations
-  complex*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
-  complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-  complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-  
-  complex*16 :: volume_force(number_of_layers - 1, 2)   ! The volume force calculated as the gradient of the tidal potential, it has only two non-zero components at index 8 and 14
-  complex*16 :: bottom_force(4)    ! The force caused by the pressure at the lower boundary, calculated from the tidal potential, it has 4 nontrivial components: 8, 10, 14, 16
-  real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
+    real*8, parameter :: delta_r = thickness / (number_of_layers - 1)  ! Radial distance between layers
 
 
-  ! Loop variables and arrays for results
-  integer ::t,j,i,m,k
-  real*8 :: j1
-  complex*16 :: uu2(number_of_time_steps)
-  complex*16 :: uu0(number_of_time_steps)
-  real*8 :: Q_in_time(number_of_time_steps, number_of_layers)
-  real*8 :: Qcum(number_of_layers)
-  real*8 :: Q, fac
-  real*8 :: Q_average(number_of_time_steps, number_of_layers)
-  real*8 :: Q_total(number_of_time_steps)
-  complex*16 :: t_comp
+    ! Allocate fields and matrices for storing calculations
+    complex*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
 
-  ! Initialize arrays with zero values
-  displacement = 0.0d0
-  cauchy = 0.0d0
-  cauchy_integral = 0.0d0
-
-  bottom_force = 0.0d0
-  volume_force = 0.0d0
-
-  matrix = 0.0d0
-
-  !!!!!!!
-  uu2 = 0.0d0
-  uu0 = 0.0d0
-  Q_in_time = 0.0d0
-  Qcum = 0.0d0
-  Q = 0.0d0
-  t_comp = 0
-  Q_average = 0.0d0
-  Q_total = 0.0d0
+    complex*16 :: volume_force(number_of_layers - 1, 2)   ! The volume force calculated as the gradient of the tidal potential, it has only two non-zero components at index 8 and 14
+    complex*16 :: bottom_force(4)    ! The force caused by the pressure at the lower boundary, calculated from the tidal potential, it has 4 nontrivial components: 8, 10, 14, 16
+    real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
 
 
-  ! Main simulation loop over time steps, careful to number_of_time_steps - 1
-  do t=0,number_of_time_steps-1
+    ! Loop variables and arrays for results
+    integer ::t,j,i,m,k
+    real*8 :: j1
 
-      ! Calculate the forces at this time step
-      call calculate_forces(number_of_layers, t, jmax, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
+    real*8 :: Q_in_time(number_of_time_steps, number_of_layers)
+    real*8 :: Qcum(number_of_layers)
+    real*8 :: Q, fac
+    real*8 :: Q_average(number_of_time_steps, number_of_layers)
+    real*8 :: Q_total(number_of_time_steps)
+    complex*16 :: t_comp
 
-      ! Loop over each harmonic degree 'j'
-      do j=2,jmax
-          j1 = real(j)
-          call fill_matrix(number_of_layers, matrix, j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
+    ! Initialize arrays with zero values
+    displacement = 0.0d0
+    cauchy = 0.0d0
+    cauchy_integral = 0.0d0
 
-          ! Loop over each order 'm' for the current degree 'j'
-          do m=0,j
+    bottom_force = 0.0d0
+    volume_force = 0.0d0
 
-              do k=1, number_of_layers
-                  cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) -&
-                   (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 3) * delta_t
-                  cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5)-&
-                   (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 5) * delta_t
-                  cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7)-&
-                   (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
-              end do
+    matrix = 0.0d0
 
-              ! Solve the linear system for the current harmonic order
-              call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force,&
-                   bottom_force, cauchy_integral, cauchy, displacement)
-          end do
-      end do
-
-      ! Calculate and print the radial displacement at the surface
-      call calculate_and_print_surface_radial_displacement(number_of_layers, jmax, t, number_of_time_steps, uu2, uu0, delta_t, displacement)
-
-      !!!!!!!!!!!!!
-      ! Pocitani zahrivani
-      do i=1, number_of_layers
-
-          Qcum=0
-          do j=2, jmax
-
-              do m=0,j
-                  fac=2d0
-                  if(m.eq.0) fac=1d0
-                  t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 3)
-                  Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
-                  t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 5)
-                  Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
-                  t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 7)
-                  Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
-              end do
-
-          end do
-
-          Q_in_time(t+1, i) = Qcum(i)/(2*eta)
-      end do
-      if (t>20) then
-          do i=21,t
-              do m=1, number_of_layers
-                  Q_average(t, m) = Q_average(t, m) + Q_in_time(i, m)
-              end do
-          end do
-      do m=1, number_of_layers
-          Q_average(t, m) = Q_average(t, m)/(t-20)
-          !print*, Q_average(t, m)
-      end do
-      do m=1, number_of_layers -1
-          Q_total(t) = Q_total(t) + ((Q_average(t,m)+Q_average(t,m+1))/2.0)*(radius+m*delta_r/2.0)**2*delta_r
-      end do
-      print*, t, Q_total(t)
+    !!!!!!!
+    Q_in_time = 0.0d0
+    Qcum = 0.0d0
+    Q = 0.0d0
+    t_comp = 0
+    Q_average = 0.0d0
+    Q_total = 0.0d0
 
 
-      endif
+    ! Main simulation loop over time steps, careful to number_of_time_steps - 1
+    do t=0,number_of_time_steps-1
 
-  end do
+        ! Calculate the forces at this time step
+        call calculate_forces(number_of_layers, t, jmax, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
+
+        ! Loop over each harmonic degree 'j'
+        do j=2,jmax
+            j1 = real(j)
+            call fill_matrix(number_of_layers, matrix, j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
+
+            ! Loop over each order 'm' for the current degree 'j'
+            do m=0,j
+
+                do k=1, number_of_layers
+                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) -&
+                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 3) * delta_t
+                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5)-&
+                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 5) * delta_t
+                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7)-&
+                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
+                end do
+
+                ! Solve the linear system for the current harmonic order
+                call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force,&
+                    bottom_force, cauchy_integral, cauchy, displacement)
+            end do
+        end do
+
+        !!!!!!!!!!!!!
+        ! Pocitani zahrivani
+        do i=1, number_of_layers
+
+            Qcum=0
+            do j=2, jmax
+
+                do m=0,j
+                    fac=2d0
+                    if(m.eq.0) fac=1d0
+                    t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 3)
+                    Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
+                    t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 5)
+                    Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
+                    t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 7)
+                    Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
+                end do
+
+            end do
+
+            Q_in_time(t+1, i) = Qcum(i)/(2*eta)
+        end do
+        if (t>20) then
+            do i=21,t
+                do m=1, number_of_layers
+                    Q_average(t, m) = Q_average(t, m) + Q_in_time(i, m)
+                end do
+            end do
+        do m=1, number_of_layers
+            Q_average(t, m) = Q_average(t, m)/(t-20)
+            !print*, Q_average(t, m)
+        end do
+        do m=1, number_of_layers -1
+            Q_total(t) = Q_total(t) + ((Q_average(t,m)+Q_average(t,m+1))/2.0)*(radius+m*delta_r/2.0)**2*delta_r
+        end do
+        print*, t, Q_total(t)
 
 
+        endif
 
-  open(1, file = 'file.dat')
-      ! Write the time and displacement data to file
-      do i=1, number_of_time_steps
-          write(1,*) (i-1)*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), real(uu0(i)), real(uu2(i)), aimag(uu2(i))
-      end do
-  close(1)
+    end do
 
     open(4, file = 'Q.dat')
-      ! Write the time and displacement data to file
-      do i=21, number_of_time_steps-1
-          write(4,*) (i-1)*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), Q_total(i)/1e9
-      end do
-  close(4)
+        ! Write the time and displacement data to file
+        do i=21, number_of_time_steps-1
+            write(4,*) (i-1)*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), Q_total(i)/1e9
+        end do
+    close(4)
 
 
-end program Europa_simulation
+    end program Europa_simulation
