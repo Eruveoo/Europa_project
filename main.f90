@@ -194,8 +194,7 @@ subroutine calculate_forces(number_of_layers, t, jmax, volume_force, bottom_forc
 
   ! Declare the types of the arguments
   integer, intent(in) :: number_of_layers, t, jmax
-  complex*16, intent(out) :: volume_force(number_of_layers-1, 3*(jmax*(jmax+1)/2+jmax)+1),&
-                             bottom_force(3*(jmax*(jmax+1)/2+jmax)+1)
+  complex*16, intent(out) :: volume_force(number_of_layers-1, 2), bottom_force(4)
   real*8, intent(in) :: radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity
 
   ! Declare local variables
@@ -210,27 +209,27 @@ subroutine calculate_forces(number_of_layers, t, jmax, volume_force, bottom_forc
   ! Loop over each layer to compute the volume forces
   do i=1,number_of_layers-1
       ksi=konst*(radius+(i-1/2.0)*delta_r)
-      volume_force(i,8)=cmplx(-ksi*sqrt(18*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t),0)
+      volume_force(i,1) = dcmplx(-ksi*sqrt(18*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t), 0.D0)
 
       real_=ksi*sqrt(27*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t)
       imag_=-ksi*sqrt(48*4.D0*datan(1.D0))*dsin(angular_speed*t_*delta_t)!<
-      volume_force(i,14)=cmplx(real_,imag_)
+      volume_force(i,2)=dcmplx(real_,imag_)
   end do
 
   ! Compute a modified constant factor for bottom force calculation
   ksi = (ice_density + delta_rho) * angular_speed**2 * excentricity * radius**2
 
   ! Compute the bottom forces at specific indices
-  bottom_force(8)=cmplx(-ksi*sqrt((18*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
-  bottom_force(10)=cmplx(ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
+  bottom_force(1)=dcmplx(-ksi*sqrt((18*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
+  bottom_force(2)=dcmplx(ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t),0)
 
   real_=ksi*sqrt((27*4.D0*datan(1.D0))/(25))*dcos(angular_speed*t_*delta_t)
   imag_=-ksi*sqrt((48*4.D0*datan(1.D0))/(25))*dsin(angular_speed*t_*delta_t)
-  bottom_force(14)=cmplx(real_,imag_)
+  bottom_force(3)=dcmplx(real_,imag_)
 
   real_=-ksi*sqrt((81*4.D0*datan(1.D0))/(50))*dcos(angular_speed*t_*delta_t)
   imag_=ksi*sqrt((72*4.D0*datan(1.D0))/(25))*dsin(angular_speed*t_*delta_t)
-  bottom_force(16)=cmplx(real_,imag_)
+  bottom_force(4)=dcmplx(real_,imag_)
 
 end subroutine
 
@@ -292,18 +291,33 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
   call bandec (A, n, m1, m2, np, mp, AL, mpl, INDX, d)
 
   ! Prepare the right-hand side vector from 'volume_force' and 'bottom_force'.
-  do i = 1, number_of_layers - 1
-      yr(6 * i + 2) = -dreal(volume_force(i, 3 * ((j * (j + 1)) / 2 + m) - 1))
-      yi(6 * i + 2) = -dimag(volume_force(i, 3 * ((j * (j + 1)) / 2 + m) - 1))
-      yr(6 * i + 3) = -dreal(volume_force(i, 3 * ((j * (j + 1)) / 2 + m) + 1))
-      yi(6 * i + 3) = -dimag(volume_force(i, 3 * ((j * (j + 1)) / 2 + m) + 1))
-  end do
+  if (j == 2) then
+    select case (m)
+        case (0)
+            do i = 1, number_of_layers - 1
+                yr(6 * i + 2) = -dreal(volume_force(i, 1))
+            end do
+        case (2)
+            do i = 1, number_of_layers - 1
+                yr(6 * i + 2) = -dreal(volume_force(i, 2))
+                yi(6 * i + 2) = -dimag(volume_force(i, 2))
+            end do
+    end select
+end if
 
   ! Set the first two elements from 'bottom_force'.
-  yr(2) = dreal(bottom_force(3 * ((j * (j + 1)) / 2 + m) - 1))
-  yi(2) = dimag(bottom_force(3 * ((j * (j + 1)) / 2 + m) - 1))
-  yr(3) = dreal(bottom_force(3 * ((j * (j + 1)) / 2 + m) + 1))
-  yi(3) = dimag(bottom_force(3 * ((j * (j + 1)) / 2 + m) + 1))
+if (j == 2) then
+    select case (m)
+        case (0)
+            yr(2) = dreal(bottom_force(1))
+            yr(3) = dreal(bottom_force(2))
+        case (2)
+            yr(2) = dreal(bottom_force(3))
+            yi(2) = dimag(bottom_force(3))
+            yr(3) = dreal(bottom_force(4))
+            yi(3) = dimag(bottom_force(4))
+    end select
+end if
 
   do i = 1, number_of_layers
       yr(i*6-2) = yr(i*6-2) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 7))
@@ -313,23 +327,6 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
       yi(i*6-1) = yi(i*6-1) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 5))
       yi(i*6) = yi(i*6) +dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 3))
   end do
-
-      !if (j==2) then
-       !   if (m==0) then
-        !      open(6, file = 'rhs.dat')
-        !!      do i=1, 6*number_of_layers+2
-        !          write(6,*) yr(i)
-         !     end do
-         !     close(6)
-
-         !     open(7, file= 'matrix.dat')
-         !         do i = 1, 6*number_of_layers+2
-        !          write(7, *) (matrix(i, k), k=1, 6*number_of_layers+2)
-        !          end do
-        !      close(7)
-        !  end if
-     ! end if
-
 
 
   ! Solve the system for the real and imaginary parts.
@@ -537,9 +534,10 @@ program Europa_simulation
   complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
   complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
   
+  complex*16 :: volume_force(number_of_layers - 1, 2)   ! The volume force calculated as the gradient of the tidal potential, it has only two non-zero components at index 8 and 14
+  complex*16 :: bottom_force(4)    ! The force caused by the pressure at the lower boundary, calculated from the tidal potential, it has 4 nontrivial components: 8, 10, 14, 16
   real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
-  complex*16 :: bottom_force(3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
-  complex*16 :: volume_force(number_of_layers - 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+
 
   ! Loop variables and arrays for results
   integer ::t,j,i,m,k
@@ -553,21 +551,15 @@ program Europa_simulation
   real*8 :: Q_total(number_of_time_steps)
   complex*16 :: t_comp
 
-  !!!!!!!!!!!!!
-  real*8 :: koef1, koef2, ksi
-  complex*16 :: volume_force_8(number_of_time_steps)
-  complex*16 :: volume_force_14(number_of_time_steps)
-  complex*16 :: bottom_force_0(number_of_time_steps)
-  complex*16 :: real_bottom_force(number_of_time_steps)
-  !!!!!!!!!!!!!
-
   ! Initialize arrays with zero values
-  matrix = 0.0d0
+  displacement = 0.0d0
   cauchy = 0.0d0
   cauchy_integral = 0.0d0
-  displacement = 0.0d0
+
   bottom_force = 0.0d0
   volume_force = 0.0d0
+
+  matrix = 0.0d0
 
   !!!!!!!
   uu2 = 0.0d0
@@ -579,13 +571,6 @@ program Europa_simulation
   Q_average = 0.0d0
   Q_total = 0.0d0
 
-  !!!!!!!!
-  ! Pro testovani
-  volume_force_14 = 0.0d0
-  volume_force_8 = 0.0d0
-  bottom_force_0 = 0.0d0
-  real_bottom_force = 0.0d0
-  !!!!!!!!
 
   ! Main simulation loop over time steps, careful to number_of_time_steps - 1
   do t=0,number_of_time_steps-1
@@ -670,27 +655,7 @@ program Europa_simulation
       end do
   close(1)
 
-  !!!!!!!!!!!!!
-  open(2, file = 'volume_force.dat')
-  ! Write the time and displacement data to file
-  do i=1, number_of_time_steps
-      write(2,*) volume_force_8(i), volume_force_14(i)
-  end do
-  close(2)
-  open(3, file = 'bottom_force.dat')
-  ! Write the time and displacement data to file
-  do i=1, number_of_time_steps
-      write(3,*) bottom_force_0(i)
-  end do
-  close(3)
-  open(3, file = 'real_bottom_force.dat')
-  ! Write the time and displacement data to file
-  do i=1, number_of_time_steps
-      write(3,*) real_bottom_force(i)
-  end do
-  close(3)
-  !!!!!!!
-      open(4, file = 'Q.dat')
+    open(4, file = 'Q.dat')
       ! Write the time and displacement data to file
       do i=21, number_of_time_steps-1
           write(4,*) (i-1)*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), Q_total(i)/1e9
