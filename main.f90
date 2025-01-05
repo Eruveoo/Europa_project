@@ -1,4 +1,3 @@
-
 SUBROUTINE DPNM(X,N,P)
     IMPLICIT REAL*8(D-H,O-Z)
     DIMENSION P(*)
@@ -549,6 +548,29 @@ SUBROUTINE test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, 
 
     END SUBROUTINE
 
+SUBROUTINE calculate_radial_displacement_at_layer(i, jmax, number_of_layers, displacement, radial_displacement)
+
+    integer :: i, jmax, number_of_layers
+    complex*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+    complex*16 :: radial_displacement(jmax+1, jmax+1)
+
+    real*8 j1
+    integer :: j, m
+
+    j1 = real(j)
+
+    do j=1, jmax
+    
+        do m=0, j
+
+            radial_displacement(j+1,m+1) = 1/(sqrt(2*j1+1))*(sqrt(j1))*(displacement(i, 3 * (j * (j + 1) / 2 + m) - 1)+displacement(i+1, 3 * (j * (j + 1) / 2 + m) - 1))/2.0 - 1/(sqrt(2*j1+1))*(sqrt(j1+1))*(displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)+displacement(i+1, 3 * (j * (j + 1) / 2 + m) + 1))/2.0
+
+        end do
+        
+    end do
+
+    END SUBROUTINE
+
 SUBROUTINE fill_matrix(number_of_layers, matrix, j, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
 
     INTEGER number_of_layers
@@ -892,6 +914,7 @@ program Europa_simulation
     integer ::t,j,i,m,k
     real*8 :: j1
 
+    complex*16 :: radial_displacement(jmax+1, jmax+1) 
     real*8 :: Q_in_time(number_of_time_steps, number_of_layers)
     real*8 :: Qcum(number_of_layers)
     real*8 :: Q, fac
@@ -900,7 +923,42 @@ program Europa_simulation
     complex*16 :: t_comp
 
     logical :: test
+    logical :: write_deformation_data
+
+    character(len=50) :: folder_name
+    character(len=8)  :: date
+    character(len=10) :: time
+    integer, dimension(8) :: values
+    integer :: status
+
     test = .TRUE.
+    write_deformation_data = .TRUE.
+
+    if (write_deformation_data) then
+
+        ! Get the current date and time
+        call date_and_time(date, time, values=values)
+
+        ! Create timestamp in the format YYYYMMDD_HHMMSS
+        write(folder_name, '(I4.4,I2.2,I2.2,"_",I2.2,I2.2,I2.2)') &
+            values(1), values(2), values(3), values(5), values(6), values(7)
+
+        ! Append folder description
+        folder_name = trim(folder_name) // "_simulation_data"
+
+        ! Create the directory
+        call execute_command_line("mkdir -p " // trim(folder_name), exitstat=status)
+        if (status /= 0) then
+            print *, "Error: Unable to create directory!"
+            stop
+        end if
+
+        print *, "Folder created: ", trim(folder_name)
+
+        open(unit=10, file=trim(folder_name)//"/displacement101.txt",status="replace", action="write")
+        close(10)
+
+    end if
 
     ! Initialize arrays with zero values
     displacement = 0.0d0
@@ -914,6 +972,7 @@ program Europa_simulation
     matrix = 0.0d0
 
     !!!!!!!
+    radial_displacement = 0.0d0
     Q_in_time = 0.0d0
     Qcum = 0.0d0
     Q = 0.0d0
@@ -930,7 +989,9 @@ program Europa_simulation
 
         ! Loop over each harmonic degree 'j'
         do j=2,jmax
+
             j1 = real(j)
+
             call fill_matrix(number_of_layers, matrix, j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
 
             ! Loop over each order 'm' for the current degree 'j'
@@ -959,6 +1020,26 @@ program Europa_simulation
 
             call test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, ice_density, surface_g, bottom_g, delta_rho, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
 
+        end if
+
+        if (write_deformation_data) then
+
+            call calculate_radial_displacement_at_layer(100, jmax, number_of_layers, displacement, radial_displacement)
+
+            open(unit=10, file=trim(folder_name)//"/displacement101.txt", status="old", action="write", position="append")
+            ! Write time step
+            write(10, *) t * delta_t
+            ! Write harmonic coefficients (radial displacement)
+            do j = 0, jmax
+                do m = 0, j
+                    write(10,*) j, m, real(radial_displacement(j+1, m+1)), aimag(radial_displacement(j+1, m+1))
+                end do
+            end do
+            close(10)
+        
+            print *, "Radial displacement data written to: ", trim(folder_name)//"/displacement101.txt"
+        
+            
         end if
 
         !!!!!!!!!!!!!
