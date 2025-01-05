@@ -230,7 +230,6 @@ SUBROUTINE test_equation_of_motion(number_of_layers, jmax, j, m, radius, delta_r
     ! ---------------------------------
     do i = 1, number_of_layers-1
 
-        error = 0
         error = (((c2)/(2*(radius+(i-0.5)*delta_r)))-((c1)/(delta_r)))*cauchy_isotropic(i, j+1, m+1)
         error = error + (((d2)/(2*(radius+(i-0.5)*delta_r)))-((d1)/(delta_r)))*cauchy(i, 5*(j*(j+1)/2+m)-7)
         error = error + (((e2)/(2*(radius+(i-0.5)*delta_r)))-((e1)/(delta_r)))*cauchy(i, 5*(j*(j+1)/2+m)-5)
@@ -517,6 +516,169 @@ SUBROUTINE test_lower_boundary_condition(number_of_layers, jmax, j, m, bottom_g,
 
     END SUBROUTINE
 
+SUBROUTINE test_toroidial_equation_of_motion(number_of_layers, jmax, j, m, radius, delta_r, cauchy)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 radius, delta_r
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+
+    ! Declare variables
+    REAL*8 :: alpha1, alpha2, beta1, beta2
+    REAL*8 :: j1
+    COMPLEX*16 :: error, highest_error
+    INTEGER :: i, index_highest_error
+
+    ! Compute constants
+    j1 = REAL(j)
+
+    alpha1 = sqrt((j1-1)/(2*(2*j1+1)))
+    alpha2 = -(j1-1)*alpha1
+    beta1 = -sqrt((j1+1)/(2*(2*j1+1)))
+    beta2 = (j+2)*beta1
+
+    ! Initialize error tracking
+    highest_error = (0.0D0, 0.0D0)
+    index_highest_error = 0
+
+    do i = 1, number_of_layers-1
+
+        error = (((alpha2)/(2*(radius+(i-0.5)*delta_r)))-((alpha1)/(delta_r)))*cauchy(i, 5*(j*(j+1)/2+m)-6)
+        error = error + (((beta2)/(2*(radius+(i-0.5)*delta_r)))-((beta1)/(delta_r)))*cauchy(i, 5*(j*(j+1)/2+m)-4)
+        error = error + (((alpha2)/(2*(radius+(i-0.5)*delta_r)))+((alpha1)/(delta_r)))*cauchy(i+1, 5*(j*(j+1)/2+m)-6)
+        error = error + (((beta2)/(2*(radius+(i-0.5)*delta_r)))+((beta1)/(delta_r)))*cauchy(i+1, 5*(j*(j+1)/2+m)-4)
+
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_1)) then
+            highest_error = error
+            index_highest_error = i
+        end if
+
+    end do
+
+    ! ---------------------------------
+    ! Print Results
+    ! ---------------------------------
+    print *
+    print '(A, I2, A, I2)', "Test of the toroidial equation of motion for degree j =", j, " and order m =", m
+    print '(A, I4)', "Largest error is at layer:", index_highest_error
+    print '(A, 2ES25.16)', "Value of the largest error:", highest_error
+
+
+    END SUBROUTINE
+
+SUBROUTINE test_toroidial_rheology(number_of_layers, jmax, j, m, radius, delta_r, mu, cauchy, cauchy_integral, displacement)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 radius, delta_r, mu
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    COMPLEX*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+
+    ! Declare variables
+    REAL*8 :: gamma1, gamma2, delta1, delta2
+    REAL*8 :: j1
+    COMPLEX*16 :: error, highest_error_1, highest_error_2
+    INTEGER :: i, index_highest_error_1, index_highest_error_2
+
+    ! Compute constants
+    j1 = REAL(j)
+
+    gamma1 = -sqrt((j1-1)/(2*(2*j1+1)))
+    gamma2 = (j1+1)*gamma1
+    delta1 = sqrt((j1+2)/(2*(2*j1+1)))
+    delta2 = -j1*delta1
+
+    ! Initialize error tracking
+    highest_error_1 = (0.0D0, 0.0D0)
+    highest_error_2 = (0.0D0, 0.0D0)
+    index_highest_error_1 = 0
+    index_highest_error_2 = 0
+
+
+    ! ---------------------------------
+    ! First equation test
+    ! ---------------------------------
+    do i = 1, number_of_layers
+
+        error = cauchy(i, 5*(j*(j+1)/2+m)-6)/(2*mu)
+        error = error + (((gamma2)/(2*(radius+(i-1.0)*delta_r)))-((gamma1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m))
+        error = error + (((gamma2)/(2*(radius+(i-1.0)*delta_r)))+((gamma1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m))
+        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-6)
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_1)) then
+            highest_error_1 = error
+            index_highest_error_1 = i
+        end if
+
+    end do
+
+    ! ---------------------------------
+    ! Second equation test
+    ! ---------------------------------
+    do i = 1, number_of_layers
+
+        error = cauchy(i, 5*(j*(j+1)/2+m)-4)/(2*mu)
+        error = error + (((delta2)/(2*(radius+(i-1.0)*delta_r)))-((delta1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m))
+        error = error + (((delta2)/(2*(radius+(i-1.0)*delta_r)))+((delta1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m))
+        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-4)
+
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_2)) then
+            highest_error_2 = error
+            index_highest_error_2 = i
+        end if
+
+    end do
+
+    ! Print the index and value of the largest error
+    print *
+    print '(A, I2, A, I2)', "Test of the toroidial rheology equations for degree j =", j, " and order m =", m
+    print '(A, I4)', "Largest error in first equation is at layer:", index_highest_error_1
+    print '(A, 2ES25.16)', "Value of the largest error in first equation:", highest_error_1
+    print '(A, I4)', "Largest error in second equation is at layer:", index_highest_error_2
+    print '(A, 2ES25.16)', "Value of the largest error in second equation:", highest_error_2
+
+    END SUBROUTINE
+
+SUBROUTINE test_toroidial_boundary_conditions(number_of_layers, jmax, j, m, cauchy)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+
+    ! Declare variables
+    REAL*8 :: a, b
+    REAL*8 :: j1
+    COMPLEX*16 :: error_1, error_2
+
+    ! Compute constants
+    j1 = REAL(j)
+
+    a = sqrt((j1-1)/(2*(2*j1+1)))
+    b = sqrt((j1+2)/(2*(2*j1+1)))
+
+    error_1 = 0d0
+    error_2 = 0d0
+
+    ! ---------------------------------
+    ! Lower boundary condition
+    ! ---------------------------------
+    error_1 = a*cauchy(1, 5*(j*(j+1)/2+m)-6) - b*cauchy(1, 5*(j*(j+1)/2+m)-4)
+
+    ! ---------------------------------
+    ! Second equation test
+    ! ---------------------------------
+    error_2 = a*cauchy(number_of_layers, 5*(j*(j+1)/2+m)-6) - b*cauchy(number_of_layers, 5*(j*(j+1)/2+m)-4)
+
+    ! Print the index and value of the largest error
+    print *
+    print '(A, I2, A, I2)', "Test of the toroidial boundary conditions for degree j =", j, " and order m =", m
+    print '(A, 2ES25.16)', "Value of the error in the upper boundary condition:", error_1
+    print '(A, 2ES25.16)', "Value of the error in the lower boundary condition:", error_2
+
+    END SUBROUTINE
 
 SUBROUTINE test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, ice_density, surface_g, bottom_g, delta_rho, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
 
@@ -532,6 +694,7 @@ SUBROUTINE test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, 
     integer :: j, m
 
     do j=2, jmax
+
         do m=0, j
 
             call test_equation_of_continuity(number_of_layers, jmax, j, m, radius, delta_r, displacement)
@@ -543,7 +706,15 @@ SUBROUTINE test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, 
             call test_upper_boundary_condition(number_of_layers, jmax, j, m, ice_density, surface_g, cauchy, cauchy_isotropic, displacement)
 
             call test_lower_boundary_condition(number_of_layers, jmax, j, m, bottom_g, delta_rho, cauchy, cauchy_isotropic, displacement, bottom_force)
-        end do        
+
+            call test_toroidial_equation_of_motion(number_of_layers, jmax, j, m, radius, delta_r, cauchy)
+
+            call test_toroidial_rheology(number_of_layers, jmax, j, m, radius, delta_r, mu, cauchy, cauchy_integral, displacement)
+
+            call test_toroidial_boundary_conditions(number_of_layers, jmax, j, m, cauchy)
+
+        end do
+
     end do
 
     END SUBROUTINE
@@ -690,6 +861,54 @@ SUBROUTINE fill_matrix(number_of_layers, matrix, j, mu, ice_density, radius, del
     matrix(6*number_of_layers+2,6*number_of_layers+1)=-(ice_density*surface_g*sqrt(j*(j+1)))/((2*j+1)*2)
     matrix(6*number_of_layers+2,6*number_of_layers-4)=(ice_density*surface_g*(j+1))/((2*j+1)*2)
     matrix(6*number_of_layers+2,6*number_of_layers+2)=(ice_density*surface_g*(j+1))/((2*j+1)*2)
+
+    END SUBROUTINE
+
+SUBROUTINE fill_toroidial_matrix(number_of_layers, toroidial_matrix, j, mu, radius, delta_r)
+
+    INTEGER number_of_layers
+    REAL*8 toroidial_matrix(3*number_of_layers+1, 3*number_of_layers+1), j, mu, radius, delta_r
+    REAL*8 :: alpha1, alpha2, beta1, beta2, gamma1, gamma2, delta1, delta2
+
+    alpha1 = sqrt((j-1)/(2*(2*j+1)))
+    alpha2 = -(j-1)*alpha1
+    beta1 = -sqrt((j+2)/(2*(2*j+1)))
+    beta2 = (j+2)*beta1
+    gamma1 = -sqrt((j-1)/(2*(2*j+1)))
+    gamma2 = (j+1)*gamma1
+    delta1 = sqrt((j+2)/(2*(2*j+1)))
+    delta2 = -j*delta1
+
+    toroidial_matrix(1,2) = sqrt((j-1)/(2*(2*j+1)))
+    toroidial_matrix(1,3) = -sqrt((j+2)/(2*(2*j+1)))
+
+    toroidial_matrix(2,1) = ((gamma2)/(2*radius)-(gamma1)/(delta_r))
+    toroidial_matrix(2,4) = ((gamma2)/(2*radius)+(gamma1)/(delta_r))
+    toroidial_matrix(2,2) = 1.0/(2*mu)
+
+    toroidial_matrix(3,1) = ((delta2)/(2*radius)-(delta1)/(delta_r))
+    toroidial_matrix(3,4) = ((delta2)/(2*radius)+(delta1)/(delta_r))
+    toroidial_matrix(3,3) = 1.0/(2*mu)
+
+    do i=2,number_of_layers
+
+        toroidial_matrix(3*(i-1)+1,3*(i-1)-1) = ((alpha2)/(2*(radius+(i-1.5)*delta_r))-(alpha1)/(delta_r))
+        toroidial_matrix(3*(i-1)+1,3*(i-1)) = ((beta2)/(2*(radius+(i-1.5)*delta_r))-(beta1)/(delta_r))
+        toroidial_matrix(3*(i-1)+1,3*(i-1)+2) = ((alpha2)/(2*(radius+(i-1.5)*delta_r))+(alpha1)/(delta_r))
+        toroidial_matrix(3*(i-1)+1,3*(i-1)+3) = ((beta2)/(2*(radius+(i-1.5)*delta_r))+(beta1)/(delta_r))
+
+        toroidial_matrix(3*(i-1)+2,3*(i-1)+1) = ((gamma2)/(2*(radius+(i-1.0)*delta_r))-(gamma1)/(delta_r))
+        toroidial_matrix(3*(i-1)+2,3*(i-1)+4) = ((gamma2)/(2*(radius+(i-1.0)*delta_r))+(gamma1)/(delta_r))
+        toroidial_matrix(3*(i-1)+2,3*(i-1)+2) = 1.0/(2*mu)
+
+        toroidial_matrix(3*(i-1)+3,3*(i-1)+1) = ((delta2)/(2*(radius+(i-1.0)*delta_r))-(delta1)/(delta_r))
+        toroidial_matrix(3*(i-1)+3,3*(i-1)+4) = ((delta2)/(2*(radius+(i-1.0)*delta_r))+(delta1)/(delta_r))
+        toroidial_matrix(3*(i-1)+3,3*(i-1)+3) = 1.0/(2*mu)
+
+    end do
+
+    toroidial_matrix(3*number_of_layers + 1, 3*number_of_layers-1) = sqrt((j-1)/(2*(2*j+1)))
+    toroidial_matrix(3*number_of_layers + 1, 3*number_of_layers) = -sqrt((j+2)/(2*(2*j+1)))
 
     END SUBROUTINE
 
@@ -874,6 +1093,86 @@ subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
 
     end subroutine
 
+subroutine solve_toroidial_system(number_of_layers, jmax, j, m, toroidial_matrix, cauchy_integral, cauchy, displacement)
+   implicit none
+
+   integer, intent(in) :: number_of_layers, jmax, j, m
+   real*8, intent(in) :: toroidial_matrix(3*number_of_layers+1,3*number_of_layers+1)
+   complex*16, intent(in) :: cauchy_integral(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3)
+   complex*16, intent(inout) :: cauchy(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3), displacement(number_of_layers+1,3*(jmax*(jmax+1)/2+jmax)+1)
+
+   ! Declare workspace matrices and vectors with fixed bounds.
+   real*8 :: A(1000,1000), AL(1000,1000)
+   real*8 :: yr(3*number_of_layers+1), yi(3*number_of_layers+1), d
+
+   ! Declare integer variables for indexing and dimensioning purposes.
+   integer :: i, k, n, m1, m2, np, mp, mpl
+
+   ! Allocate the index array for the LU decomposition.
+   integer, allocatable :: INDX(:)
+
+   ! Initialize the real and imaginary parts of the solution vectors.
+   yr = 0.0d0
+   yi=0.0d0
+
+   ! Set the dimensions and bandwidths for the matrix A.
+   n = 3*number_of_layers+1  ! Dimension of the matrix B.
+   m1 = 2  ! Number of sub-diagonals in matrix B.
+   m2 = 2  ! Number of super-diagonals in matrix B.
+   np = 1000  ! Number of rows in the matrix A, which holds the band of matrix B.
+   mp = 1000  ! Number of columns in the matrix A.
+   mpl = 1000  ! Number of columns in the matrix AL (auxiliary matrix).
+
+   ! Initialize the band matrix A to zero before populating with values from 'matrix'.
+   do i = 1, n
+       do k = 1, m1 + m2 + 1
+           A(i, k) = 0d0
+       end do
+   end do
+
+
+   ! Populate the band matrix A from 'matrix'.
+   do i = 1, n
+       do k = 1, m1 + m2 + 1
+           if (i + k - m1 - 1 > 0 .and. i + k - m1 - 1 <= n) then
+               A(i, k) = toroidial_matrix(i, i + k - m1 - 1)
+           endif
+       end do
+   end do
+
+   ! Allocate the index array for LU decomposition.
+   ALLOCATE(INDX(n))
+
+   ! Perform LU decomposition on the band matrix A.
+   call bandec (A, n, m1, m2, np, mp, AL, mpl, INDX, d)
+
+
+    do i = 1, number_of_layers
+       yr(i*3-1) = yr(i*3-1) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 6))
+       yr(i*3) = yr(i*3) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 4))
+       yi(i*3-1) = yi(i*3-1) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 6))
+       yi(i*3) = yi(i*3) + dimag(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 4))
+    end do
+
+   ! Solve the system for the real and imaginary parts.
+   call banbks(A, n, m1, m2, np, mp, AL, mpl, INDX, yr)  ! Solve for real part.
+   call banbks(A, n, m1, m2, np, mp, AL, mpl, INDX, yi)  ! Solve for imaginary part.
+
+   ! Deallocate the index array.
+   DEALLOCATE(INDX)
+
+   ! Store the solution into 'displacement' and 'cauchy' arrays.
+   do i = 1, number_of_layers
+   displacement(i, 3 * ((j * (j + 1)) / 2 + m)) = dcmplx(yr(3 * (i - 1) + 1), yi(3 * (i - 1) + 1))
+   cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 6) = dcmplx(yr(3 * (i - 1) + 2), yi(3 * (i - 1) + 2))
+   cauchy(i, 5 * ((j * (j + 1)) / 2 + m) - 4) = dcmplx(yr(3 * (i - 1) + 3), yi(3 * (i - 1) + 3))
+   end do
+
+   ! Store the solution for the last layer into 'displacement'.
+   displacement(number_of_layers + 1, 3 * ((j * (j + 1)) / 2 + m)) = dcmplx(yr(3 * number_of_layers + 1), yi(3 * number_of_layers + 1))
+
+   end subroutine
+
 ! This program simulates the deformation of Jupiter's moon Europa
 program Europa_simulation
     implicit none   ! Require all variables to be explicitly declared
@@ -907,7 +1206,9 @@ program Europa_simulation
 
     complex*16 :: volume_force(number_of_layers - 1, 2)   ! The volume force calculated as the gradient of the tidal potential, it has only two non-zero components at index 8 and 14
     complex*16 :: bottom_force(4)    ! The force caused by the pressure at the lower boundary, calculated from the tidal potential, it has 4 nontrivial components: 8, 10, 14, 16
+    
     real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
+    real*8 :: toroidial_matrix(3 * number_of_layers + 1, 3 * number_of_layers + 1)
 
 
     ! Loop variables and arrays for results
@@ -970,6 +1271,7 @@ program Europa_simulation
     volume_force = 0.0d0
 
     matrix = 0.0d0
+    toroidial_matrix = 0.0d0
 
     !!!!!!!
     radial_displacement = 0.0d0
@@ -994,21 +1296,28 @@ program Europa_simulation
 
             call fill_matrix(number_of_layers, matrix, j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
 
+            call fill_toroidial_matrix(number_of_layers, toroidial_matrix, j1, mu, radius, delta_r)
+
             ! Loop over each order 'm' for the current degree 'j'
             do m=0,j
 
                 do k=1, number_of_layers
                     cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) -&
                     (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 3) * delta_t
+                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) -&
+                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 4) * delta_t
                     cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5)-&
                     (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 5) * delta_t
+                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6)-&
+                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 6) * delta_t
                     cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7)-&
                     (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
                 end do
 
                 ! Solve the linear system for the current harmonic order
-                call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force,&
-                    bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
+                call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
+
+                call solve_toroidial_system(number_of_layers, jmax, j, m, toroidial_matrix, cauchy_integral, cauchy, displacement)
 
             end do
         end do
