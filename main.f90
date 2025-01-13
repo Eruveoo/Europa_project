@@ -333,7 +333,7 @@ SUBROUTINE test_rheology(number_of_layers, jmax, j, m, radius, delta_r, mu, cauc
         error = error + (((r2)/(2*(radius+(i-1.0)*delta_r)))-((r1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)
         error = error + (((q2)/(2*(radius+(i-1.0)*delta_r)))+((q1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) - 1)
         error = error + (((r2)/(2*(radius+(i-1.0)*delta_r)))+((r1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) + 1)
-        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-5)
+        error = error - cauchy_integral(i, 5*(j*(j+1)/2+m)-5)
         ! Track largest error
         if (ABS(error) > ABS(highest_error_1)) then
             highest_error_1 = error
@@ -350,7 +350,7 @@ SUBROUTINE test_rheology(number_of_layers, jmax, j, m, radius, delta_r, mu, cauc
         error = cauchy(i, 5*(j*(j+1)/2+m)-7)/(2*mu)
         error = error + (((p2)/(2*(radius+(i-1.0)*delta_r)))-((p1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m) - 1)
         error = error + (((p2)/(2*(radius+(i-1.0)*delta_r)))+((p1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) - 1)
-        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-7)
+        error = error - cauchy_integral(i, 5*(j*(j+1)/2+m)-7)
 
         ! Track largest error
         if (ABS(error) > ABS(highest_error_2)) then
@@ -366,9 +366,9 @@ SUBROUTINE test_rheology(number_of_layers, jmax, j, m, radius, delta_r, mu, cauc
     do i = 1, number_of_layers
 
         error = cauchy(i, 5*(j*(j+1)/2+m)-3)/(2*mu)
-        error = error + (((p2)/(2*(radius+(i-1.0)*delta_r)))-((p1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)
-        error = error + (((p2)/(2*(radius+(i-1.0)*delta_r)))+((p1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) + 1)
-        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-3)
+        error = error + (((s2)/(2*(radius+(i-1.0)*delta_r)))-((s1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)
+        error = error + (((s2)/(2*(radius+(i-1.0)*delta_r)))+((s1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) + 1)
+        error = error - cauchy_integral(i, 5*(j*(j+1)/2+m)-3)
 
         ! Track largest error
         if (ABS(error) > ABS(highest_error_3)) then
@@ -605,7 +605,7 @@ SUBROUTINE test_toroidial_rheology(number_of_layers, jmax, j, m, radius, delta_r
         error = cauchy(i, 5*(j*(j+1)/2+m)-6)/(2*mu)
         error = error + (((gamma2)/(2*(radius+(i-1.0)*delta_r)))-((gamma1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m))
         error = error + (((gamma2)/(2*(radius+(i-1.0)*delta_r)))+((gamma1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m))
-        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-6)
+        error = error - cauchy_integral(i, 5*(j*(j+1)/2+m)-6)
         ! Track largest error
         if (ABS(error) > ABS(highest_error_1)) then
             highest_error_1 = error
@@ -622,7 +622,7 @@ SUBROUTINE test_toroidial_rheology(number_of_layers, jmax, j, m, radius, delta_r
         error = cauchy(i, 5*(j*(j+1)/2+m)-4)/(2*mu)
         error = error + (((delta2)/(2*(radius+(i-1.0)*delta_r)))-((delta1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m))
         error = error + (((delta2)/(2*(radius+(i-1.0)*delta_r)))+((delta1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m))
-        error = error - (1/mu)*cauchy_integral(i, 5*(j*(j+1)/2+m)-4)
+        error = error - cauchy_integral(i, 5*(j*(j+1)/2+m)-4)
 
         ! Track largest error
         if (ABS(error) > ABS(highest_error_2)) then
