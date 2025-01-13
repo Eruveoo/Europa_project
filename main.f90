@@ -534,7 +534,7 @@ SUBROUTINE test_toroidial_equation_of_motion(number_of_layers, jmax, j, m, radiu
 
     alpha1 = sqrt((j1-1)/(2*(2*j1+1)))
     alpha2 = -(j1-1)*alpha1
-    beta1 = -sqrt((j1+1)/(2*(2*j1+1)))
+    beta1 = -sqrt((j1+2)/(2*(2*j1+1)))
     beta2 = (j+2)*beta1
 
     ! Initialize error tracking
@@ -547,9 +547,12 @@ SUBROUTINE test_toroidial_equation_of_motion(number_of_layers, jmax, j, m, radiu
         error = error + (((beta2)/(2*(radius+(i-0.5)*delta_r)))-((beta1)/(delta_r)))*cauchy(i, 5*(j*(j+1)/2+m)-4)
         error = error + (((alpha2)/(2*(radius+(i-0.5)*delta_r)))+((alpha1)/(delta_r)))*cauchy(i+1, 5*(j*(j+1)/2+m)-6)
         error = error + (((beta2)/(2*(radius+(i-0.5)*delta_r)))+((beta1)/(delta_r)))*cauchy(i+1, 5*(j*(j+1)/2+m)-4)
+        if (i ==1) then
+            error = error - 0.00001
+        end if
 
         ! Track largest error
-        if (ABS(error) > ABS(highest_error_1)) then
+        if (ABS(error) > ABS(highest_error)) then
             highest_error = error
             index_highest_error = i
         end if
@@ -1257,7 +1260,7 @@ subroutine solve_toroidial_system(number_of_layers, jmax, j, m, toroidial_matrix
    ! Perform LU decomposition on the band matrix A.
    call bandec (A, n, m1, m2, np, mp, AL, mpl, INDX, d)
 
-
+   yr(4)= 0.00001
     do i = 1, number_of_layers
        yr(i*3-1) = yr(i*3-1) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 6))
        yr(i*3) = yr(i*3) + dreal(cauchy_integral(i, 5 * (j * (j + 1) / 2 + m) - 4))
