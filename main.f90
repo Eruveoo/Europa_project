@@ -1085,6 +1085,40 @@ SUBROUTINE calculate_forces(number_of_layers, t, volume_force, bottom_force, &
 
     end subroutine
 
+subroutine update_cauchy_integral(jmax, number_of_layers, cauchy_integral, cauchy, delta_t, eta, mu)
+
+    integer :: jmax, number_of_layers
+    complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    real*8 :: delta_t, eta, mu
+
+    integer :: j, m, k
+
+    do j=1, jmax
+
+        do m=0, j
+        
+            do k=1, number_of_layers
+                
+                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) -&
+                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 3) * delta_t
+                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) -&
+                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 4) * delta_t
+                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5)-&
+                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 5) * delta_t
+                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6)-&
+                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 6) * delta_t
+                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7)-&
+                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
+
+            end do
+
+        end do
+
+    end do
+
+    end subroutine
+
 subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
          volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
     implicit none
@@ -1431,7 +1465,7 @@ program Europa_simulation
     integer :: status
 
     test = .TRUE.
-    write_deformation_data = .TRUE.
+    write_deformation_data = .FALSE.
 
     if (write_deformation_data) then
 
@@ -1488,6 +1522,8 @@ program Europa_simulation
         ! Calculate the forces at this time step
         call calculate_forces(number_of_layers, t, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
 
+        call update_cauchy_integral(jmax, number_of_layers, cauchy_integral, cauchy, delta_t, eta, mu)
+
         j=1
 
         do m=0,1
@@ -1509,19 +1545,6 @@ program Europa_simulation
 
             ! Loop over each order 'm' for the current degree 'j'
             do m=0,j
-
-                do k=1, number_of_layers
-                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) -&
-                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 3) * delta_t
-                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) -&
-                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 4) * delta_t
-                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5)-&
-                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 5) * delta_t
-                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6)-&
-                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 6) * delta_t
-                    cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7)-&
-                    (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
-                end do
 
                 ! Solve the linear system for the current harmonic order
                 call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
