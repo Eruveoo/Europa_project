@@ -683,6 +683,317 @@ SUBROUTINE test_toroidial_boundary_conditions(number_of_layers, jmax, j, m, cauc
 
     END SUBROUTINE
 
+SUBROUTINE test_equation_of_continuity_for_j1(number_of_layers, jmax, j, m, radius, delta_r, displacement)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 radius, delta_r
+    COMPLEX*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+
+    ! Declare variables
+    REAL*8 :: a1, b1, b2
+    COMPLEX*16 :: k1, k2, k3, k4
+    COMPLEX*16 :: error, highest_error
+    INTEGER :: i, index_highest_error
+
+    ! Compute constants
+    a1 = SQRT(1.0D0 / 3.0D0)
+    b1 = -SQRT(2.0D0 / 3.0D0)
+    b2 = 3.0D0 * b1
+
+    ! Initialize values
+    highest_error = (0.0D0, 0.0D0)  ! Complex zero
+    index_highest_error = 0
+
+    ! Loop through each layer to calculate errors
+    do i = 1, number_of_layers
+
+        ! Compute terms for error calculation
+        k1 = - ((a1) / (delta_r)) * displacement(i, 3 * (j * (j + 1) / 2 + m) - 1)
+        k2 = (((b2) / (2 * (radius + (i - 1) * delta_r))) - ((b1) / (delta_r))) * displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)
+        k3 = ((a1) / (delta_r)) * displacement(i + 1, 3 * (j * (j + 1) / 2 + m) - 1)
+        k4 = (((b2) / (2 * (radius + (i - 1) * delta_r))) + ((b1) / (delta_r))) * displacement(i + 1, 3 * (j * (j + 1) / 2 + m) + 1)
+
+        ! Calculate the total error for this layer
+        error = k1 + k2 + k3 + k4
+
+        ! Check if this error is the largest so far
+        if (ABS(error) > ABS(highest_error)) then
+            highest_error = error
+            index_highest_error = i
+        end if
+
+    end do
+
+    ! Print the index and value of the largest error
+    print *
+    print '(A, I2, A, I2)', "Test of the equation of continuity for degree j =", j, " and order m =", m
+    print '(A, I4)', "Largest error is at layer:", index_highest_error
+    print '(A, 2ES25.16)', "Value of the largest error:", highest_error
+
+    END SUBROUTINE
+
+    
+SUBROUTINE test_equation_of_motion_for_j1(number_of_layers, jmax, j, m, radius, delta_r, cauchy, cauchy_isotropic)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 radius, delta_r
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy_isotropic(number_of_layers, jmax, jmax)
+
+    ! Declare variables
+    REAL*8 :: c1, c2, e1, e2, f1, f2, g1, g2, h1, h2
+    COMPLEX*16 :: error, highest_error_1, highest_error_2
+    INTEGER :: i, index_highest_error_1, index_highest_error_2
+
+    ! Compute constants
+    c1 = -(1.0D0) / (3.0D0)
+    c2 = 2.0D0 * c1
+    e1 = -SQRT(5.0D0) / 3.0D0
+    e2 = 2.0D0 * e1
+    f1 = SQRT(2.0D0) / 3.0D0
+    f2 = -f1
+    g1 = SQRT(1.0D0 / 90.0D0)
+    g2 = -g1
+    h1 = -SQRT(3.0D0 / 5.0D0)
+    h2 = 4.0D0 * h1
+
+    ! Initialize error tracking
+    highest_error_1 = (0.0D0, 0.0D0)
+    highest_error_2 = (0.0D0, 0.0D0)
+    index_highest_error_1 = 0
+    index_highest_error_2 = 0
+
+
+    ! ---------------------------------
+    ! First equation test
+    ! ---------------------------------
+    do i = 1, number_of_layers-1
+
+        error = (((c2)/(2*(radius+(i-0.5)*delta_r)))-((c1)/(delta_r)))*cauchy_isotropic(i, j+1, m+1)
+        error = error + (((e2)/(2*(radius+(i-0.5)*delta_r)))-((e1)/(delta_r)))*cauchy(i, 3 * ((j * (j + 1)) / 2 + m) - 1)
+        error = error + (((c2)/(2*(radius+(i-0.5)*delta_r)))+((c1)/(delta_r)))*cauchy_isotropic(i+1, j+1, m+1)
+        error = error + (((e2)/(2*(radius+(i-0.5)*delta_r)))+((e1)/(delta_r)))*cauchy(i+1, 3 * ((j * (j + 1)) / 2 + m) - 1)
+
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_1)) then
+            highest_error_1 = error
+            index_highest_error_1 = i
+        end if
+
+    end do
+
+    ! ---------------------------------
+    ! Second equation test
+    ! ---------------------------------
+    do i = 1, number_of_layers-1
+
+        error = (((f2)/(2*(radius+(i-0.5)*delta_r)))-((f1)/(delta_r)))*cauchy_isotropic(i, j+1, m+1)
+        error = error + (((g2)/(2*(radius+(i-0.5)*delta_r)))-((g1)/(delta_r)))*cauchy(i, 3 * ((j * (j + 1)) / 2 + m) - 1)
+        error = error + (((h2)/(2*(radius+(i-0.5)*delta_r)))-((h1)/(delta_r)))*cauchy(i, 3 * ((j * (j + 1)) / 2 + m) + 1)
+        error = error + (((f2)/(2*(radius+(i-0.5)*delta_r)))+((f1)/(delta_r)))*cauchy_isotropic(i+1, j+1, m+1)
+        error = error + (((g2)/(2*(radius+(i-0.5)*delta_r)))+((g1)/(delta_r)))*cauchy(i+1, 3 * ((j * (j + 1)) / 2 + m) - 1)
+        error = error + (((h2)/(2*(radius+(i-0.5)*delta_r)))+((h1)/(delta_r)))*cauchy(i+1, 3 * ((j * (j + 1)) / 2 + m) + 1)
+
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_2)) then
+            highest_error_2 = error
+            index_highest_error_2 = i
+        end if
+
+    end do
+
+    ! ---------------------------------
+    ! Print Results
+    ! ---------------------------------
+    print *
+    print '(A, I2, A, I2)', "Test of the equation of motion for degree j =", j, " and order m =", m
+    print '(A, I4)', "Largest error in first equation is at layer:", index_highest_error_1
+    print '(A, 2ES25.16)', "Value of the largest error in first equation:", highest_error_1
+    print '(A, I4)', "Largest error in second equation is at layer:", index_highest_error_2
+    print '(A, 2ES25.16)', "Value of the largest error in second equation:", highest_error_2
+
+    END SUBROUTINE
+
+SUBROUTINE test_rheology_for_j1(number_of_layers, jmax, j, m, radius, delta_r, mu, cauchy, cauchy_integral, displacement)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 radius, delta_r, mu
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    COMPLEX*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+
+    ! Declare variables
+    REAL*8 :: q1, r1, r2, s1, s2
+    COMPLEX*16 :: error, highest_error_1, highest_error_2
+    INTEGER :: i, index_highest_error_1, index_highest_error_2
+
+    ! Compute constants
+    q1 = SQRT(5.0D0) / 3.0D0
+    r1 = -SQRT(1.0D0 / 90.0D0)
+    r2 = 3.0D0 * r1
+    s1 = SQRT(3.0D0 / 5.0D0)
+    s2 = -2.0D0 * s1
+
+    ! Initialize error tracking
+    highest_error_1 = (0.0D0, 0.0D0)
+    highest_error_2 = (0.0D0, 0.0D0)
+    index_highest_error_1 = 0
+    index_highest_error_2 = 0
+
+
+    ! ---------------------------------
+    ! First equation test
+    ! ---------------------------------
+    do i = 1, number_of_layers
+
+        error = cauchy(i, 3 * ((j * (j + 1)) / 2 + m) - 1)/(2*mu)
+        error = error + -((q1)/(delta_r))*displacement(i, 3 * (j * (j + 1) / 2 + m) - 1)
+        error = error + (((r2)/(2*(radius+(i-1.0)*delta_r)))-((r1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)
+        error = error + ((q1)/(delta_r))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) - 1)
+        error = error + (((r2)/(2*(radius+(i-1.0)*delta_r)))+((r1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) + 1)
+        error = error - cauchy_integral(i, 3 * ((j * (j + 1)) / 2 + m) - 1)
+
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_1)) then
+            highest_error_1 = error
+            index_highest_error_1 = i
+        end if
+
+    end do
+
+    ! ---------------------------------
+    ! Second equation test
+    ! ---------------------------------
+    do i = 1, number_of_layers
+
+        error = cauchy(i, 3 * ((j * (j + 1)) / 2 + m) + 1)/(2*mu)
+        error = error + (((s2)/(2*(radius+(i-1.0)*delta_r)))-((s1)/(delta_r)))*displacement(i, 3 * (j * (j + 1) / 2 + m) + 1)
+        error = error + (((s2)/(2*(radius+(i-1.0)*delta_r)))+((s1)/(delta_r)))*displacement(i+1, 3 * (j * (j + 1) / 2 + m) + 1)
+        error = error - cauchy_integral(i, 3 * ((j * (j + 1)) / 2 + m) + 1)
+
+        ! Track largest error
+        if (ABS(error) > ABS(highest_error_2)) then
+            highest_error_2 = error
+            index_highest_error_2 = i
+        end if
+
+    end do
+
+    ! Print the index and value of the largest error
+    print *
+    print '(A, I2, A, I2)', "Test of the rheology equations for degree j =", j, " and order m =", m
+    print '(A, I4)', "Largest error in first equation is at layer:", index_highest_error_1
+    print '(A, 2ES25.16)', "Value of the largest error in first equation:", highest_error_1
+    print '(A, I4)', "Largest error in second equation is at layer:", index_highest_error_2
+    print '(A, 2ES25.16)', "Value of the largest error in second equation:", highest_error_2
+
+    END SUBROUTINE
+
+SUBROUTINE test_upper_boundary_condition_for_j1(number_of_layers, jmax, j, m, ice_density, surface_g, cauchy, cauchy_isotropic, displacement)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 :: ice_density, surface_g
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy_isotropic(number_of_layers, jmax, jmax)
+    COMPLEX*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+
+    ! Declare variables
+    REAL*8 :: a, b, d, e, f
+    COMPLEX*16 :: error_1, error_2
+
+    ! Compute constants
+    a = SQRT(1.0D0 / 9.0D0)
+    b = SQRT(5.0D0 / 9.0D0)
+    d = SQRT(2.0D0 / 9.0D0)
+    e = SQRT(1.0D0 / 90.0D0)
+    f = SQRT(3.0D0 / 5.0D0)
+
+    error_1 = 0d0
+    error_2 = 0d0
+
+
+    ! ---------------------------------
+    ! First equation test
+    ! ---------------------------------
+    error_1 = -a*cauchy_isotropic(number_of_layers, j+1, m+1)-b*cauchy(number_of_layers, 3 * ((j * (j + 1)) / 2 + m) - 1)
+    error_1 = error_1 + (ice_density*surface_g)/(6.0D0)*displacement(number_of_layers, 3 * (j * (j + 1) / 2 + m) - 1)
+    error_1 = error_1 + (ice_density*surface_g)/(6.0D0)*displacement(number_of_layers+1, 3 * (j * (j + 1) / 2 + m) - 1)
+    
+    error_1 = error_1 - (ice_density*surface_g)/(6.0D0)*sqrt(2.0D0)*displacement(number_of_layers, 3 * (j * (j + 1) / 2 + m) + 1)
+    error_1 = error_1 - (ice_density*surface_g)/(6.0D0)*sqrt(2.0D0)*displacement(number_of_layers+1, 3 * (j * (j + 1) / 2 + m) + 1)
+    ! ---------------------------------
+    ! Second equation test
+    ! ---------------------------------
+    error_2 = d*cauchy_isotropic(number_of_layers, j+1, m+1)+e*cauchy(number_of_layers, 3 * ((j * (j + 1)) / 2 + m) - 1)-f*cauchy(number_of_layers, 3 * ((j * (j + 1)) / 2 + m) + 1)
+    error_2 = error_2 - (ice_density*surface_g)/(6.0D0)*sqrt(2.0D0)*displacement(number_of_layers, 3 * (j * (j + 1) / 2 + m) - 1)
+    error_2 = error_2 - (ice_density*surface_g)/(6.0D0)*sqrt(2.0D0)*displacement(number_of_layers+1, 3 * (j * (j + 1) / 2 + m) - 1)
+    error_2 = error_2 + (ice_density*surface_g)/(6.0D0)*(2.0D0)*displacement(number_of_layers, 3 * (j * (j + 1) / 2 + m) + 1)
+    error_2 = error_2 + (ice_density*surface_g)/(6.0D0)*(2.0D0)*displacement(number_of_layers+1, 3 * (j * (j + 1) / 2 + m) + 1)
+
+    ! Print the index and value of the largest error
+    print *
+    print '(A, I2, A, I2)', "Test of the Upper boundary condition for degree j =", j, " and order m =", m
+    print '(A, 2ES25.16)', "Value of the error in first equation:", error_1
+    print '(A, 2ES25.16)', "Value of the error in the second equation:", error_2
+
+    END SUBROUTINE
+
+SUBROUTINE test_lower_boundary_condition_for_j1(number_of_layers, jmax, j, m, bottom_g, delta_rho, cauchy, cauchy_isotropic, displacement)
+
+    ! Declare input arguments
+    INTEGER number_of_layers, jmax, j, m
+    REAL*8 :: bottom_g, delta_rho
+    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16 :: cauchy_isotropic(number_of_layers, jmax, jmax)
+    COMPLEX*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+
+    ! Declare variables
+    REAL*8 :: a, b, d, e, f
+    COMPLEX*16 :: error_1, error_2
+
+    ! Compute constants
+    a = SQRT(1.0D0 / 9.0D0)
+    b = SQRT(5.0D0 / 9.0D0)
+
+    d = SQRT(2.0D0 / 9.0D0)
+    e = SQRT(1.0D0 / 90.0D0)
+    f = SQRT(3.0D0 / 5.0D0)
+
+    error_1 = 0d0
+    error_2 = 0d0
+
+
+    ! ---------------------------------
+    ! First equation test
+    ! ---------------------------------
+    error_1 = a*cauchy_isotropic(1, j+1, m+1)+b*cauchy(1, 3 * ((j * (j + 1)) / 2 + m) - 1)
+    error_1 = error_1 + (delta_rho*bottom_g)/(6.0D0)*displacement(1, 3 * (j * (j + 1) / 2 + m) - 1)
+    error_1 = error_1 + (delta_rho*bottom_g)/(6.0D0)*displacement(1+1, 3 * (j * (j + 1) / 2 + m) - 1)
+    
+    error_1 = error_1 - (delta_rho*bottom_g)/(6.0D0)*sqrt(2.0D0)*displacement(1, 3 * (j * (j + 1) / 2 + m) + 1)
+    error_1 = error_1 - (delta_rho*bottom_g)/(6.0D0)*sqrt(2.0D0)*displacement(1+1, 3 * (j * (j + 1) / 2 + m) + 1)
+    
+    ! ---------------------------------
+    ! Second equation test
+    ! ---------------------------------
+    error_2 = -d*cauchy_isotropic(1, j+1, m+1)-e*cauchy(1, 3 * ((j * (j + 1)) / 2 + m) - 1)+f*cauchy(1, 3 * ((j * (j + 1)) / 2 + m) + 1)
+    error_2 = error_2 - (delta_rho*bottom_g)/(6.0D0)*sqrt(2.0D0)*displacement(1, 3 * (j * (j + 1) / 2 + m) - 1)
+    error_2 = error_2 - (delta_rho*bottom_g)/(6.0D0)*sqrt(2.0D0)*displacement(1+1, 3 * (j * (j + 1) / 2 + m) - 1)
+    error_2 = error_2 + (delta_rho*bottom_g)/(6.0D0)*(2.0D0)*displacement(1, 3 * (j * (j + 1) / 2 + m) + 1)
+    error_2 = error_2 + (delta_rho*bottom_g)/(6.0D0)*(2.0D0)*displacement(1+1, 3 * (j * (j + 1) / 2 + m) + 1)
+
+    ! Print the index and value of the largest error
+    print *
+    print '(A, I2, A, I2)', "Test of the Lower boundary condition for degree j =", j, " and order m =", m
+    print '(A, 2ES25.16)', "Value of the error in first equation:", error_1
+    print '(A, 2ES25.16)', "Value of the error in the second equation:", error_2
+
+    END SUBROUTINE
+
 SUBROUTINE test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, ice_density, surface_g, bottom_g, delta_rho, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
 
     INTEGER number_of_layers, jmax
@@ -695,6 +1006,20 @@ SUBROUTINE test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, 
     complex*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
 
     integer :: j, m
+
+    do m=0, 1
+
+        call test_equation_of_continuity_for_j1(number_of_layers, jmax, 1, m, radius, delta_r, displacement)
+
+        call test_equation_of_motion_for_j1(number_of_layers, jmax, 1, m, radius, delta_r, cauchy, cauchy_isotropic)
+
+        call test_rheology_for_j1(number_of_layers, jmax, 1, m, radius, delta_r, mu, cauchy, cauchy_integral, displacement)
+
+        call test_upper_boundary_condition_for_j1(number_of_layers, jmax, 1, m, ice_density, surface_g, cauchy, cauchy_isotropic, displacement)
+
+        call test_lower_boundary_condition_for_j1(number_of_layers, jmax, 1, m, bottom_g, delta_rho, cauchy, cauchy_isotropic, displacement)
+
+    end do
 
     do j=2, jmax
 
@@ -922,7 +1247,7 @@ SUBROUTINE fill_matrix_for_j1(number_of_layers, matrix_for_j1, mu, ice_density, 
     REAL*8 :: a1, b1, b2, c1, c2, e1, e2, f1, f2, g1, g2, h1, h2, q1, q2, r1, r2, s1, s2
     REAL*8 :: j
 
-    j=1
+    j=1.0
 
     a1=sqrt((j)/(2*j+1))
 
@@ -997,11 +1322,11 @@ SUBROUTINE fill_matrix_for_j1(number_of_layers, matrix_for_j1, mu, ice_density, 
         matrix_for_j1(5*(i-1)+3,5*(i-1)+4)=((g2)/(2*(radius+(i-1.5)*delta_r))+(g1)/(delta_r))
         matrix_for_j1(5*(i-1)+3,5*i)=((h2)/(2*(radius+(i-1.5)*delta_r))+(h1)/(delta_r))
 
-        matrix_for_j1(5*(i-1)+5,5*(i-1)+1)=((q2)/(2*(radius+(i-1.0)*delta_r))-(q1)/(delta_r))
-        matrix_for_j1(5*(i-1)+5,5*(i-1)+2)=((r2)/(2*(radius+(i-1.0)*delta_r))-(r1)/(delta_r))
-        matrix_for_j1(5*(i-1)+5,5*i+1)=((q2)/(2*(radius+(i-1.0)*delta_r))+(q1)/(delta_r))
-        matrix_for_j1(5*(i-1)+5,5*i+2)=((r2)/(2*(radius+(i-1.0)*delta_r))+(r1)/(delta_r))
-        matrix_for_j1(5*(i-1)+5,5*(i-1)+4)=1.0/(2*mu)
+        matrix_for_j1(5*(i-1)+4,5*(i-1)+1)=((q2)/(2*(radius+(i-1.0)*delta_r))-(q1)/(delta_r))
+        matrix_for_j1(5*(i-1)+4,5*(i-1)+2)=((r2)/(2*(radius+(i-1.0)*delta_r))-(r1)/(delta_r))
+        matrix_for_j1(5*(i-1)+4,5*i+1)=((q2)/(2*(radius+(i-1.0)*delta_r))+(q1)/(delta_r))
+        matrix_for_j1(5*(i-1)+4,5*i+2)=((r2)/(2*(radius+(i-1.0)*delta_r))+(r1)/(delta_r))
+        matrix_for_j1(5*(i-1)+4,5*(i-1)+4)=1.0/(2*mu)
 
         matrix_for_j1(5*(i-1)+5,5*(i-1)+2)=((s2)/(2*(radius+(i-1.0)*delta_r))-(s1)/(delta_r))
         matrix_for_j1(5*(i-1)+5,5*i+2)=((s2)/(2*(radius+(i-1.0)*delta_r))+(s1)/(delta_r))
