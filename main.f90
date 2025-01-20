@@ -1461,39 +1461,52 @@ SUBROUTINE calculate_forces(number_of_layers, t, volume_force, bottom_force, &
 
     end subroutine
 
-subroutine update_cauchy_integral(jmax, number_of_layers, cauchy_integral, cauchy, delta_t, eta, mu)
+    subroutine update_cauchy_integral(jmax, number_of_layers, cauchy_integral, cauchy, delta_t, eta, mu)
+        implicit none
 
-    integer :: jmax, number_of_layers
-    complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-    real*8 :: delta_t, eta, mu
-
-    integer :: j, m, k
-
-    do j=1, jmax
-
-        do m=0, j
-        
-            do k=1, number_of_layers
-                
-                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 3) -&
-                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 3) * delta_t
-                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 4) -&
-                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 4) * delta_t
-                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 5)-&
-                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 5) * delta_t
-                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 6)-&
-                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 6) * delta_t
-                cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7) = cauchy_integral(k, 5 * (j * (j + 1) / 2 + m) - 7)-&
-                (1.0/eta) * cauchy(k, 5 * (j * (j + 1) / 2 + m) - 7) * delta_t
-
+        integer, intent(in) :: jmax, number_of_layers
+        real*8, intent(in) :: delta_t, eta, mu
+        complex*16, intent(inout) :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+        complex*16, intent(in) :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    
+        integer :: j, m, k, base_idx, i
+        real*8 :: coeff
+        integer, parameter :: num_updates = 5
+        integer :: update_offsets(num_updates)
+    
+        ! Precompute the coefficient for the updates
+        coeff = delta_t / eta
+    
+        ! Precompute update offsets
+        update_offsets = (/ -3, -4, -5, -6, -7 /)
+    
+        ! First case: j = 1
+        j = 1
+        do m = 0, j
+            base_idx = 3 * ((j * (j + 1)) / 2 + m)
+            do k = 1, number_of_layers
+                ! Update only the necessary components
+                cauchy_integral(k, base_idx - 1) = cauchy_integral(k, base_idx - 1) - coeff * cauchy(k, base_idx - 1)
+                cauchy_integral(k, base_idx + 1) = cauchy_integral(k, base_idx + 1) - coeff * cauchy(k, base_idx + 1)
             end do
-
         end do
-
-    end do
-
-    end subroutine
+    
+        ! General case: j = 2 to jmax
+        do j = 2, jmax
+            do m = 0, j
+                base_idx = 5 * ((j * (j + 1)) / 2 + m)
+                do k = 1, number_of_layers
+                    ! Use a loop to apply updates for all offsets
+                    do i = 1, num_updates
+                        cauchy_integral(k, base_idx + update_offsets(i)) = &
+                            cauchy_integral(k, base_idx + update_offsets(i)) - &
+                            coeff * cauchy(k, base_idx + update_offsets(i))
+                    end do
+                end do
+            end do
+        end do
+    
+end subroutine
 
 subroutine solve_linear_system(number_of_layers, jmax, j, m, matrix,&
          volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
