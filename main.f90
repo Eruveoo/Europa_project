@@ -1107,9 +1107,9 @@ SUBROUTINE calculate_radial_displacement_at_layer(i, jmax, number_of_layers, dis
     real*8 j1
     integer :: j, m
 
-    j1 = real(j)
-
     do j=1, jmax
+
+        j1 = real(j)
     
         do m=0, j
 
