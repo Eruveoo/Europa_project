@@ -1440,7 +1440,7 @@ SUBROUTINE calculate_forces(number_of_layers, t, volume_force, bottom_force, &
         volume_force(i,1) = dcmplx(-ksi*sqrt(18*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t), 0.D0)
 
         real_=ksi*sqrt(27*4.D0*datan(1.D0))*dcos(angular_speed*t_*delta_t)
-        imag_=-ksi*sqrt(48*4.D0*datan(1.D0))*dsin(angular_speed*t_*delta_t)!<
+        imag_=-ksi*sqrt(48*4.D0*datan(1.D0))*dsin(angular_speed*t_*delta_t)
         volume_force(i,2)=dcmplx(real_,imag_)
     end do
 
@@ -1798,7 +1798,7 @@ program Europa_simulation
     integer, parameter :: number_of_layers=50
     integer, parameter :: jmax=2
     integer, parameter :: number_of_time_steps=1000
-    real*8, parameter :: delta_t=450
+    real*8, parameter :: delta_t=3.551181*24*36
 
     ! Physical parameters for Europa's ice layer
     real*8, parameter :: radius = 1531000.0d0        ! Radius of Europa in meters
