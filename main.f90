@@ -1461,50 +1461,48 @@ SUBROUTINE calculate_forces(number_of_layers, t, volume_force, bottom_force, &
 
     end subroutine
 
-    subroutine update_cauchy_integral(jmax, number_of_layers, cauchy_integral, cauchy, delta_t, eta, mu)
-        implicit none
+subroutine update_cauchy_integral(jmax, number_of_layers, delta_t, eta, cauchy_integral, cauchy)
+    implicit none
 
-        integer, intent(in) :: jmax, number_of_layers
-        real*8, intent(in) :: delta_t, eta, mu
-        complex*16, intent(inout) :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-        complex*16, intent(in) :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-    
-        integer :: j, m, k, base_idx, i
-        real*8 :: coeff
-        integer, parameter :: num_updates = 5
-        integer :: update_offsets(num_updates)
-    
-        ! Precompute the coefficient for the updates
-        coeff = delta_t / eta
-    
-        ! Precompute update offsets
-        update_offsets = (/ -3, -4, -5, -6, -7 /)
-    
-        ! First case: j = 1
-        j = 1
-        do m = 0, j
-            base_idx = 3 * ((j * (j + 1)) / 2 + m)
-            do k = 1, number_of_layers
-                ! Update only the necessary components
-                cauchy_integral(k, base_idx - 1) = cauchy_integral(k, base_idx - 1) - coeff * cauchy(k, base_idx - 1)
-                cauchy_integral(k, base_idx + 1) = cauchy_integral(k, base_idx + 1) - coeff * cauchy(k, base_idx + 1)
-            end do
+    integer, intent(in) :: jmax, number_of_layers
+    real*8, intent(in) :: delta_t, eta
+    complex*16, intent(inout) :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16, intent(in) :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+
+    integer :: j, m, k, base_idx, i
+    real*8 :: coeff
+    integer, parameter :: num_updates = 5
+    integer :: update_offsets(num_updates)
+
+    ! Precompute the coefficient for the updates
+    coeff = delta_t / (2.0*eta)
+
+    ! Precompute update offsets
+    update_offsets = (/ -3, -4, -5, -6, -7 /)
+
+    ! First case: j = 1
+    j = 1
+    do m = 0, j
+        base_idx = 3 * ((j * (j + 1)) / 2 + m)
+        do k = 1, number_of_layers
+            !Update only the necessary components
+            cauchy_integral(k, base_idx - 1) = cauchy_integral(k, base_idx - 1) - coeff * cauchy(k, base_idx - 1)
+            cauchy_integral(k, base_idx + 1) = cauchy_integral(k, base_idx + 1) - coeff * cauchy(k, base_idx + 1)
         end do
-    
-        ! General case: j = 2 to jmax
-        do j = 2, jmax
-            do m = 0, j
-                base_idx = 5 * ((j * (j + 1)) / 2 + m)
-                do k = 1, number_of_layers
-                    ! Use a loop to apply updates for all offsets
-                    do i = 1, num_updates
-                        cauchy_integral(k, base_idx + update_offsets(i)) = &
-                            cauchy_integral(k, base_idx + update_offsets(i)) - &
-                            coeff * cauchy(k, base_idx + update_offsets(i))
-                    end do
+    end do
+
+    ! General case: j = 2 to jmax
+    do j = 2, jmax
+        do m = 0, j
+            base_idx = 5 * ((j * (j + 1)) / 2 + m)
+            do k = 1, number_of_layers
+                ! Use a loop to apply updates for all offsets
+                do i = 1, num_updates
+                    cauchy_integral(k, base_idx + update_offsets(i)) = cauchy_integral(k, base_idx + update_offsets(i)) - coeff * cauchy(k, base_idx + update_offsets(i))
                 end do
             end do
         end do
+    end do
     
 end subroutine
 
@@ -1797,62 +1795,76 @@ program Europa_simulation
     implicit none   ! Require all variables to be explicitly declared
 
     ! Constants for the simulation
-    integer, parameter :: number_of_layers=101
+    integer, parameter :: number_of_layers=50
     integer, parameter :: jmax=2
     integer, parameter :: number_of_time_steps=1000
     real*8, parameter :: delta_t=450
 
     ! Physical parameters for Europa's ice layer
-    real*8, parameter :: radius = 1510000.0d0        ! Radius of Europa in meters
+    real*8, parameter :: radius = 1531000.0d0        ! Radius of Europa in meters
     real*8, parameter :: thickness = 30000.0d0       ! Thickness of ice in meters
     real*8, parameter :: mu = 3.3E9                  ! Shear modulus in Pascal
-    real*8, parameter :: eta = 1.0E13                ! Vizkozity in Pascal*s
+    real*8, parameter :: eta = 1E15                ! Viscosity in Pascal*s
     real*8, parameter :: surface_g = 1.314           ! Surface gravity in m/s^2
     real*8, parameter :: bottom_g = 1.314            ! Bottom gravity in m/s^2 (same as surface gravity)
-    real*8, parameter :: ice_density = 970.0d0       ! Density of ice in kg/m^3
-    real*8, parameter :: delta_rho = 30.0d0          ! Density difference in kg/m^3
-    real*8, parameter :: angular_speed = 2.0478E-5   ! Angular speed in rad/s
+    real*8, parameter :: ice_density = 920.0d0       ! Density of ice in kg/m^3
+    real*8, parameter :: delta_rho = 80.0d0          ! Density difference in kg/m^3
+    real*8, parameter :: angular_speed = 2.047827249E-5   ! Angular speed in rad/s
     real*8, parameter :: excentricity = 0.009        ! Eccentricity of Europa's orbit
-
     real*8, parameter :: delta_r = thickness / (number_of_layers - 1)  ! Radial distance between layers
 
+    ! Allocatable arrays
+    complex*16, allocatable :: displacement(:,:)
+    complex*16, allocatable :: cauchy(:,:)
+    complex*16, allocatable :: cauchy_isotropic(:,:,:)
+    complex*16, allocatable :: cauchy_integral(:,:)
+    complex*16, allocatable :: fluidity(:)
+    complex*16, allocatable :: volume_force(:,:)
+    complex*16, allocatable :: bottom_force(:)
+    complex*16, allocatable :: radial_displacement(:,:)
+    real*8, allocatable :: matrix(:,:)
+    real*8, allocatable :: matrix_for_j1(:,:)
+    real*8, allocatable :: toroidial_matrix(:,:)
+    real*8, allocatable :: Q_in_time(:,:)
+    real*8, allocatable :: Q_average(:,:)
+    real*8, allocatable :: Q_total(:)
 
-    ! Allocate fields and matrices for storing calculations
-    complex*16 :: displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
-    complex*16 :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-    complex*16 :: cauchy_isotropic(number_of_layers, jmax+1, jmax+1)
-    complex*16 :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
-
-    complex*16 :: volume_force(number_of_layers - 1, 2)   ! The volume force calculated as the gradient of the tidal potential, it has only two non-zero components at index 8 and 14
-    complex*16 :: bottom_force(4)    ! The force caused by the pressure at the lower boundary, calculated from the tidal potential, it has 4 nontrivial components: 8, 10, 14, 16
-    
-    real*8 :: matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2)
-    real*8 :: matrix_for_j1(5 * number_of_layers + 2, 5 * number_of_layers + 2)
-    real*8 :: toroidial_matrix(3 * number_of_layers + 1, 3 * number_of_layers + 1)
-
-
-    ! Loop variables and arrays for results
-    integer ::t,j,i,m,k
+    ! Loop variables and other results
+    integer :: t, j, i, m
     real*8 :: j1
 
-    complex*16 :: radial_displacement(jmax+1, jmax+1) 
-    real*8 :: Q_in_time(number_of_time_steps, number_of_layers)
-    real*8 :: Qcum(number_of_layers)
-    real*8 :: Q, fac
-    real*8 :: Q_average(number_of_time_steps, number_of_layers)
-    real*8 :: Q_total(number_of_time_steps)
+    ! These are used in dissipation calculation
+    real*8 :: fac, Qcum
     complex*16 :: t_comp
 
-    logical :: test
-    logical :: write_deformation_data
+    logical :: test !If true then tests of equation satisfaction are run
+    logical :: write_deformation_data   !If true then data of radial displacement at boundary are written to a file in a folder
 
+    ! This variables are for writing of data to a file
     character(len=50) :: folder_name
     character(len=8)  :: date
     character(len=10) :: time
     integer, dimension(8) :: values
-    integer :: status
 
-    test = .TRUE.
+    real :: start_time, end_time, elapsed_time
+
+    ! Allocate arrays
+    allocate(displacement(number_of_layers + 1, 3 * (jmax * (jmax + 1) / 2 + jmax) + 1))
+    allocate(cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3))
+    allocate(cauchy_isotropic(number_of_layers, jmax+1, jmax+1))
+    allocate(cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3))
+    allocate(fluidity((jmax+1)*(jmax+2)/2))
+    allocate(volume_force(number_of_layers - 1, 2))
+    allocate(bottom_force(4))
+    allocate(matrix(6 * number_of_layers + 2, 6 * number_of_layers + 2))
+    allocate(matrix_for_j1(5 * number_of_layers + 2, 5 * number_of_layers + 2))
+    allocate(toroidial_matrix(3 * number_of_layers + 1, 3 * number_of_layers + 1))
+    allocate(Q_in_time(number_of_time_steps, number_of_layers))
+    allocate(Q_average(number_of_time_steps, number_of_layers))
+    allocate(Q_total(number_of_time_steps))
+    allocate(radial_displacement(jmax + 1, jmax + 1))
+
+    test = .FALSE.
     write_deformation_data = .FALSE.
 
     if (write_deformation_data) then
@@ -1868,11 +1880,7 @@ program Europa_simulation
         folder_name = trim(folder_name) // "_simulation_data"
 
         ! Create the directory
-        call execute_command_line("mkdir -p " // trim(folder_name), exitstat=status)
-        if (status /= 0) then
-            print *, "Error: Unable to create directory!"
-            stop
-        end if
+        call system("mkdir -p " // trim(folder_name))
 
         print *, "Folder created: ", trim(folder_name)
 
@@ -1898,7 +1906,6 @@ program Europa_simulation
     radial_displacement = 0.0d0
     Q_in_time = 0.0d0
     Qcum = 0.0d0
-    Q = 0.0d0
     t_comp = 0
     Q_average = 0.0d0
     Q_total = 0.0d0
@@ -1907,17 +1914,16 @@ program Europa_simulation
     ! Main simulation loop over time steps, careful to number_of_time_steps - 1
     do t=0,number_of_time_steps-1
 
-        ! Calculate the forces at this time step
         call calculate_forces(number_of_layers, t, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
 
-        call update_cauchy_integral(jmax, number_of_layers, cauchy_integral, cauchy, delta_t, eta, mu)
+        call update_cauchy_integral(jmax, number_of_layers, delta_t, eta, cauchy_integral, cauchy)
 
         j=1
 
         do m=0,1
 
             call fill_matrix_for_j1(number_of_layers, matrix_for_j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
-            
+
             call solve_system_for_j1(number_of_layers, jmax, j, m, matrix_for_j1, cauchy_integral, cauchy, cauchy_isotropic, displacement)
 
         end do
@@ -1972,51 +1978,53 @@ program Europa_simulation
         end if
 
         !!!!!!!!!!!!!
-        ! Pocitani zahrivani
-        do i=1, number_of_layers
+        ! Calculation of the heating, this part will be most likely rewritten
 
-            Qcum=0
-            do j=2, jmax
+        if (t>0) then
 
-                do m=0,j
-                    fac=2d0
-                    if(m.eq.0) fac=1d0
-                    t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 3)
-                    Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
-                    t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 5)
-                    Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
-                    t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 7)
-                    Qcum(i) = Qcum(i) + fac*(real(t_comp)**2+aimag(t_comp)**2)
+            do i = 1, number_of_layers
+                Qcum = 0d0
+            
+                do j = 2, jmax
+                    do m = 0, j
+                        fac = 2d0
+                        if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
+                        
+                        ! Accumulate energy components from cauchy tensor
+                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 3)
+                        Qcum = Qcum + fac * (dreal(t_comp)**2 + dimag(t_comp)**2)
+                        
+                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 5)
+                        Qcum = Qcum + fac * (dreal(t_comp)**2 + dimag(t_comp)**2)
+                        
+                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 7)
+                        Qcum = Qcum + fac * (dreal(t_comp)**2 + dimag(t_comp)**2)
+                    end do
                 end do
-
+            
+                ! Normalize Qcum for layer i
+                Q_in_time(t, i) = Qcum / (2.0d0 * eta)
             end do
-
-            Q_in_time(t+1, i) = Qcum(i)/(2*eta)
-        end do
-        if (t>20) then
-            do i=21,t
-                do m=1, number_of_layers
-                    Q_average(t, m) = Q_average(t, m) + Q_in_time(i, m)
-                end do
+            
+            ! Initialize Q_total(t) before accumulation
+            Q_total(t) = 0d0
+            
+            ! Apply the trapezoidal rule to approximate the integral
+            do m = 1, number_of_layers - 1
+                Q_total(t) = Q_total(t) + ((Q_in_time(t, m) * (radius + (m - 1) * delta_r)**2 + Q_in_time(t, m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
             end do
-        do m=1, number_of_layers
-            Q_average(t, m) = Q_average(t, m)/(t-20)
-            !print*, Q_average(t, m)
-        end do
-        do m=1, number_of_layers -1
-            Q_total(t) = Q_total(t) + ((Q_average(t,m)+Q_average(t,m+1))/2.0)*(radius+m*delta_r/2.0)**2*delta_r
-        end do
-        print*, t, Q_total(t)
+            
+            ! Output the result
+            print*, t, Q_total(t)
 
-
-        endif
+        end if
 
     end do
 
     open(4, file = 'Q.dat')
         ! Write the time and displacement data to file
-        do i=21, number_of_time_steps-1
-            write(4,*) (i-1)*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), Q_total(i)/1e9
+        do i=100, number_of_time_steps-1
+            write(4,*) i*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), Q_total(i)/1e9
         end do
     close(4)
 
