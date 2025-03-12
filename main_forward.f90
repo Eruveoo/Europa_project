@@ -1,3 +1,443 @@
+!C ----------------------------------------------------------------
+SUBROUTINE VCSUM(NP,AJM,BJM,NR,CJM)
+!C ----------------------------------------------------------------
+    IMPLICIT REAL*8(D-H,O-Z),COMPLEX*16(A-C)
+    DIMENSION AJM(*),BJM(*),CJM(*)
+    DIMENSION CSUMA(4,301),COMP(4)
+    DIMENSION RE(2049),QIM(2049)
+    COMMON /DD0/ NGQ,NFOURC,ROOTS(200),WGHTS(200),PNMARR(200,7000),CEMARR(10192,200)
+
+    NFOUR=NFOURC
+    NROOT=NGQ/2
+    NP1=NP+1
+    NR1=NR+1
+    DNFR=DFLOAT(NFOUR)
+    PI2=8.D00*DATAN(1.D00)
+    PI4=PI2+PI2
+
+    DO 20 IR=1,NROOT
+    POMWT=PI4*WGHTS(IR)
+    DO 6 MS=1,NP1
+    DO 4 K=1,4
+4 CSUMA(K,MS)=(0.D00,0.D00)
+    DO 6 JS=MS,NP1
+    JM=(JS-1)*JS/2+MS
+    DO 5 K=1,4
+    CPOM=AJM(JM)
+    IF(K.GT.2) CPOM=BJM(JM)
+    ZK=(-1.D00)**(JS+MS)
+    ZK=ZK**(K+1)
+5 CSUMA(K,MS)=CSUMA(K,MS)+CPOM*PNMARR(IR,JM)*ZK
+6 CONTINUE
+!C     EVALUATE THE PRODUCTS AROUND THE LATITUDE CIRCLE
+    DO 11 JFI=1,NFOUR
+    DO 7 K=1,4
+7 COMP(K)=(0.D00,0.D00)
+    DO 9 M=1,NP
+    MS=M+1
+    DO 8 K=1,4
+8 COMP(K)=COMP(K)+CSUMA(K,MS)*CEMARR(JFI,M)
+9 CONTINUE
+    DO 10 K=1,4
+10 COMP(K)=COMP(K)+DCONJG(COMP(K))+CSUMA(K,1)
+    FABP=DBLE(COMP(1)*COMP(3))
+    FABN=DBLE(COMP(2)*COMP(4))
+    RE(JFI)=FABP
+11 QIM(JFI)=FABN
+!C     PERFORM THE FFT OF TWO REAL SERIES
+    CALL DFFTAR(RE,QIM,NFOUR,0)
+    RE(NFOUR+1)=RE(1)
+    QIM(NFOUR+1)=QIM(1)
+    DO 12 MS=1,NR1
+    NFMS=NFOUR+2-MS
+    POM1=(RE(MS)+RE(NFMS))/2.D00/DNFR
+    POM2=(QIM(MS)-QIM(NFMS))/2.D00/DNFR
+    CAP=DCMPLX(POM1,POM2)
+    POM1=(QIM(MS)+QIM(NFMS))/2.D00/DNFR
+    POM2=(-RE(MS)+RE(NFMS))/2.D00/DNFR
+    CAN=DCMPLX(POM1,POM2)
+!C     FINALLY, EVALUATE THE IR-TH TERM OF GAUSS-LEGENDRE QUADRATURE
+    DO 12 JS=MS,NR1
+    JM=(JS-1)*JS/2+MS
+    ZN=(-1.D00)**(JS+MS)
+    IF(IR.EQ.1) CJM(JM)=(0.D00,0.D00)
+12 CJM(JM)=CJM(JM)+POMWT*PNMARR(IR,JM)*(CAP+CAN*ZN)
+20 CONTINUE
+    RETURN
+    END
+
+!........................................................................
+subroutine CLEB1(j1,m1,j2,m2,j,m,cc)
+
+!     Clebch-Gordanovy koeficienty pro j2=1	C_(j1,m1,j2,m2)^(j,m)
+!........................................................................
+    implicit real*8 (a-h,o-z)
+    cc=0.d00
+    if(j2.ne.1) return
+    if(iabs(j1-j).gt.1.or.(j1+j).eq.0) return
+    if(iabs(m2).gt.1.or.iabs(m1).gt.j1) return
+    if(m.ne.(m1+m2)) return
+    c=dble(j)
+    g=dble(m)
+    zn=1d00
+    if(m2) 10,20,30
+10 if(j1-j) 12,14,16
+12 cc=(c-g-1d00)*(c-g)/(c+c-1d00)/(c+c)
+    goto 100
+14 cc=(c+g+1d00)*(c-g)/(c+1d00)/(c+c)
+    goto 100
+16 cc=(c+g+2d00)*(c+g+1d00)/(c+c+2d00)/(c+c+3d00)
+    goto 100
+20 if(j1-j) 22,24,26
+22 cc=(c+g)*(c-g)/(c+c-1d00)/c
+    goto 100
+24 cc=g/dsqrt(c*(c+1d00))
+    return
+26 cc=(c+g+1d00)*(c-g+1d00)/(c+1d00)/(c+c+3d00)
+    zn=-1d00
+    goto 100
+30 if(j1-j) 32,34,36
+32 cc=(c+g-1d00)*(c+g)/(c+c-1d00)/(c+c)
+    goto 100
+34 cc=(c+g)*(c-g+1d00)/(c+1d00)/(c+c)
+    zn=-1d00
+    goto 100
+36 cc=(c-g+1d00)*(c-g+2d00)/(c+c+2d00)/(c+c+3d00)
+100 cc=zn*dsqrt(cc)
+    return
+    end
+
+!.....................................................................
+    subroutine SIXJ1(j1,j2,j,l2,l,c6)
+!
+!     6-j symboly:  {j1,j2,j
+!                     1,l2,l}
+!.....................................................................
+    implicit real*8 (a-h,o-z)
+    c6=0.d00
+    if(l2.gt.(j+1).or.iabs(j-1).gt.l2) return
+    if(j.gt.(j1+j2).or.iabs(j1-j2).gt.j) return
+    if(l.gt.(j2+1).or.iabs(j2-1).gt.l) return
+    a=dfloat(j1)
+    b=dfloat(j2)
+    c=dfloat(j)
+    s=a+b+c
+    zn=(-1.d00)**(j1+j2+j)
+    if(j-l2) 10,20,30
+10 if(j2-l) 12,14,16
+12 hor=(s+2)*(s+3)*(s-a-a+1)*(s-a-a+2)
+    dol=(b+b+1)*(b+1)*(b+b+3)*(c+c+1)*(c+1)*(c+c+3)
+    goto 100
+14 hor=(s+2)*(s-c-c)*(s-b-b+1)*(s-a-a+1)
+    dol=b*(b+b+1)*(b+1)*(c+c+1)*(c+1)*(c+c+3)
+    zn=-zn
+    goto 100
+16 hor=(s-c-c-1)*(s-c-c)*(s-b-b+1)*(s-b-b+2)
+    dol=(b+b-1)*b*(b+b+1)*(c+c+1)*(c+1)*(c+c+3)
+    goto 100
+20 if(j2-l) 22,24,26
+22 hor=(s+2)*(s-c-c+1)*(s-b-b)*(s-a-a+1)
+    dol=(b+b+1)*(b+1)*(b+b+3)*c*(c+c+1)*(c+1)
+    zn=-zn
+    goto 100
+24 hor=-a*(a+1)+b*(b+1)+c*(c+1)
+    dol=b*(b+b+1)*(b+1)*c*(c+c+1)*(c+1)
+    c6=-zn*hor/dsqrt(dol)/2.d00
+    return
+26 hor=(s+1)*(s-c-c)*(s-b-b+1)*(s-a-a)
+    dol=(b+b-1)*b*(b+b+1)*c*(c+c+1)*(c+1)
+    goto 100
+30 if(j2-l) 32,34,36
+32 hor=(s-c-c+1)*(s-c-c+2)*(s-b-b-1)*(s-b-b)
+    dol=(b+b+1)*(b+1)*(b+b+3)*(c+c-1)*c*(c+c+1)
+    goto 100
+34 hor=(s+1)*(s-c-c+1)*(s-b-b)*(s-a-a)
+    dol=b*(b+b+1)*(b+1)*(c+c-1)*c*(c+c+1)
+    goto 100
+36 hor=s*(s+1)*(s-a-a-1)*(s-a-a)
+    dol=(b+b-1)*b*(b+b+1)*(c+c-1)*c*(c+c+1)
+100 c6=zn*dsqrt(hor/dol)/2.d00 
+    return
+end
+
+SUBROUTINE shz_tens(jmax, tens, xx, xy, xz, yx, yy, yz, zx, zy, zz)        ! pocita kartezske zlozky tenzoru 3x3 zadaneho v sfer. harmonikach
+    implicit none
+    INTEGER :: jmax
+    COMPLEX(8) :: tens((jmax+3)*(jmax-2)*9/2+17+jmax*9+4+2+2+1), xx((jmax + 3) * (jmax + 4) / 2), xy((jmax + 3) * (jmax + 4) / 2), xz((jmax + 3) * (jmax + 4) / 2), yx((jmax + 3) * (jmax + 4) / 2), yy((jmax + 3) * (jmax + 4) / 2), yz((jmax + 3) * (jmax + 4) / 2), zx((jmax + 3) * (jmax + 4) / 2), zy((jmax + 3) * (jmax + 4) / 2), zz((jmax + 3) * (jmax + 4) / 2), mkonst
+    COMPLEX(8), ALLOCATABLE :: xvec(:), yvec(:), zvec(:)
+    REAL(8) :: cg, nj
+    INTEGER :: indmax1,i, j1, m1, l1, k1, j, m, l, j1max, jnowmin, jnowmax, indvec, INDV, INDS, INDT
+    REAL(8), PARAMETER :: PI=3.141592653589793238462643383279502884197
+
+    xx=0    
+    xy=0
+    xz=0
+    yx=0
+    yy=0
+    yz=0
+    zx=0
+    zy=0
+    zz=0
+
+    indmax1=size(tens)
+    j=-1
+    do while(.true.)                        !urcenie hodnoty jmax
+            j=j+1
+            i=INDT(j,j,j+2,2)
+            if (i==indmax1) exit
+    enddo
+
+    j1max=j
+
+    if (.not.(INDS(j1max+2,j1max+2)==size(xx).and.size(xx)==size(xy).and.size(xy)==size(xz).and.&                !kontrola velkosti vstupnych poli
+            INDS(j1max+2,j1max+2)==size(yx).and.size(yx)==size(yy).and.size(yy)==size(yz).and.&
+            INDS(j1max+2,j1max+2)==size(zx).and.size(zx)==size(zy).and.size(zy)==size(zz))) then
+            write(*,*)'Problem s dimenziami vstupnych poli. - tens'
+            return
+    endif
+
+    ALLOCATE (xvec(INDV(j1max+1,j1max+1,j1max+2)),yvec(INDV(j1max+1,j1max+1,j1max+2)),zvec(INDV(j1max+1,j1max+1,j1max+2))) 
+
+    !nasobenie jednotk. vektormi 1.-krat
+
+    xvec=0
+    yvec=0
+    zvec=0
+
+    do j1=0,j1max
+
+            do m1=0,j1
+                    do k1=0,2
+                            do l1=abs(j1-k1),j1+k1
+                                    if (tens(INDT(j1,m1,l1,k1))==0) cycle
+                                    l=l1                                                !z vlastnosti c-g koef.
+                                    
+                                    jnowmin=max(abs(j1-1),abs(l-1))
+                                    jnowmax=min(j1+1,l+1)
+
+                                    do j=jnowmin,jnowmax
+                                            call ninej0m(j1,j,1,k1,1,l1,l,nj)        !podla Matasa a po 2 permutaciach
+                                            mkonst=(-1)**(k1+1)*dSQRT((2*j1+1.0)*3.D0*(2*l1+1)*(2*k1+1.0))/dSQRT(4*pi)
+                                            mkonst=mkonst*tens(INDT(j1,m1,l1,k1))*nj
+                                                    indvec=INDV(j,0,l)
+                                                    call CLEB1(j1,m1,1,1,j,0,cg)
+                                                    xvec(indvec)=xvec(INDV(j,0,l))-mkonst*cg
+                                                    yvec(indvec)=yvec(INDV(j,0,l))+(0.D0,1.D0)*mkonst*cg
+                                                    call CLEB1(j1,m1,1,-1,j,0,cg)
+                                                    xvec(indvec)=xvec(INDV(j,0,l))+mkonst*cg
+                                                    yvec(indvec)=yvec(INDV(j,0,l))+(0.D0,1.D0)*mkonst*cg
+                                                    call CLEB1(j1,m1,1,0,j,0,cg)
+                                                    zvec(indvec)=zvec(INDV(j,0,l))+mkonst*cg
+                                            do m=1,j
+                                                    indvec=INDV(j,m,l)
+                                                    call CLEB1(j1,m1,1,1,j,m,cg)
+                                                    xvec(indvec)=xvec(INDV(j,m,l))-mkonst*cg
+                                                    yvec(indvec)=yvec(INDV(j,m,l))+(0.D0,1.D0)*mkonst*cg
+                                                    call CLEB1(j1,m1,1,1,j,-m,cg)
+                                                    xvec(indvec)=xvec(INDV(j,m,l))-(-1)**(j+m+l+1)*CONJG(mkonst*cg)
+                                                    yvec(indvec)=yvec(INDV(j,m,l))+(-1)**(j+m+l+1)*CONJG((0.D0,1.D0)*mkonst*cg)
+                                                    call CLEB1(j1,m1,1,-1,j,m,cg)
+                                                    xvec(indvec)=xvec(INDV(j,m,l))+mkonst*cg
+                                                    yvec(indvec)=yvec(INDV(j,m,l))+(0.D0,1.D0)*mkonst*cg
+                                                    call CLEB1(j1,m1,1,-1,j,-m,cg)
+                                                    xvec(indvec)=xvec(INDV(j,m,l))+(-1)**(j+m+l+1)*CONJG(mkonst*cg)
+                                                    yvec(indvec)=yvec(INDV(j,m,l))+(-1)**(j+m+l+1)*CONJG((0.D0,1.D0)*mkonst*cg)
+                                                    call CLEB1(j1,m1,1,0,j,m,cg)
+                                                    zvec(indvec)=zvec(INDV(j,m,l))+mkonst*cg
+                                                    call CLEB1(j1,m1,1,0,j,-m,cg)
+                                                    zvec(indvec)=zvec(INDV(j,m,l))+(-1)**(j+m+l+1)*CONJG((0.D0,1.D0)*mkonst*cg)
+                                            enddo
+                                    enddo
+                            enddo
+                    enddo
+            enddo
+    enddo
+
+    xvec=xvec*dSQRT(2*pi)
+    yvec=yvec*dSQRT(2*pi)
+    zvec=zvec*2*dSQRT(pi)
+
+    !nasobenie jednotkovymi vektormi druhykrat resp. vypocet zloziek vektorov
+
+    call shz_vec(j1max, xvec,xx,xy,xz)        
+    call shz_vec(j1max, yvec,yx,yy,yz)
+    call shz_vec(j1max, zvec,zx,zy,zz)
+
+END SUBROUTINE shz_tens
+
+
+SUBROUTINE shz_vec(jmax, vec,x,y,z)                !vypocita kartezske zlozky vektoru zadaneho pomocou vek. sfer. harm.
+    implicit none
+
+    INTEGER :: jmax
+    COMPLEX(8) :: vec(3 * ((jmax + 1) * (jmax + 2) / 2 + jmax+1) + 1), x((jmax + 3) * (jmax + 4) / 2), y((jmax + 3) * (jmax + 4) / 2), z((jmax + 3) * (jmax + 4) / 2), mkonst
+    REAL(8) :: cg, sj
+    INTEGER :: ind1, indmax1, i, j1, m1, l1, j, m, j1max, indscal, INDV, INDS
+    REAL(8), PARAMETER :: PI=3.141592653589793238462643383279502884197
+
+
+    indmax1=size(vec)
+    j=-1
+    do while(.true.)                                !urcenie hodnoty jmax
+            j=j+1
+            i=(j*(j+3)/2)*3+1
+            if (i==indmax1) exit
+    enddo
+
+    j1max=j
+    if (.not.((j1max+3)*(j1max+2)/2==(size(x)).and.(size(x)==size(y)).and.(size(y)==size(z)))) then         !kontrola velkosti vstupnych poli
+            write(*,*)'Problem s dimenziami vstupnych poli. - vec'
+            return
+    endif
+
+
+    x=0
+    y=0
+    z=0
+    do j1=0,j1max
+
+            do m1=0,j1
+                    do l1=abs(j1-1),j1+1
+                            
+                            ind1 = INDV(j1,m1,l1)
+                            if (vec(ind1)==0) cycle
+
+                            j=l1                        !j musi byt rovne l1 z vlastnosti c-g koef.
+
+                            !spocitam konstantu mkonst, ktora nezavisi na m a len nou nasobim vysledok
+                            sj=(-1)**(j+j1+1)/dsqrt((2.D0*j+1)*3)               !6-j symbol s nulou sa da vyjadrit takto jednoducho
+                            mkonst=-dSQRT(2.D0*j1+1)*dSQRT(3.D0)*SQRT(2.D0*l1+1)/dSQRT(4*pi)
+                            mkonst=mkonst*vec(ind1)*sj/dSQRT(2.D0*j+1)
+
+
+                            !zlozky x,y,z
+                                    indscal=INDS(j,0)
+                                    call CLEB1(j1,m1,1,1,j,0,cg)
+                                    x(indscal)=x(INDS(j,0))-mkonst*cg
+                                    y(indscal)=y(INDS(j,0))+(0.D0,1.D0)*mkonst*cg
+                                    call CLEB1(j1,m1,1,-1,j,0,cg)
+                                    x(indscal)=x(INDS(j,0))+mkonst*cg
+                                    y(indscal)=y(INDS(j,0))+(0.D0,1.D0)*mkonst*cg
+                                    call CLEB1(j1,m1,1,0,j,0,cg)
+                                    z(indscal)=z(INDS(j,0))+mkonst*cg        
+                            do m=1,j
+                                    indscal=INDS(j,m)
+                                    call CLEB1(j1,m1,1,1,j,m,cg)
+                                    x(indscal)=x(INDS(j,m))-mkonst*cg
+                                    y(indscal)=y(INDS(j,m))+(0.D0,1.D0)*mkonst*cg
+                                    call CLEB1(j1,m1,1,1,j,-m,cg)
+                                    x(indscal)=x(INDS(j,m))-(-1)**m*CONJG(mkonst*cg)
+                                    y(indscal)=y(INDS(j,m))+(-1)**m*CONJG((0.D0,1.D0)*mkonst*cg)
+                                    call CLEB1(j1,m1,1,-1,j,m,cg)
+                                    x(indscal)=x(INDS(j,m))+mkonst*cg
+                                    y(indscal)=y(INDS(j,m))+(0.D0,1.D0)*mkonst*cg
+                                    call CLEB1(j1,m1,1,-1,j,-m,cg)
+                                    x(indscal)=x(INDS(j,m))+(-1)**m*CONJG(mkonst*cg)
+                                    y(indscal)=y(INDS(j,m))+(-1)**m*CONJG((0.D0,1.D0)*mkonst*cg)
+                                    call CLEB1(j1,m1,1,0,j,m,cg)        
+                                    z(indscal)=z(INDS(j,m))+mkonst*cg
+                                    call CLEB1(j1,m1,1,0,j,-m,cg)
+                                    z(indscal)=z(INDS(j,m))+(-1)**m*CONJG(mkonst*cg)        
+                            enddo
+                    enddo
+            enddo
+    enddo
+
+    x=x*dSQRT(2*pi)
+    y=y*dSQRT(2*pi)
+    z=z*2*dSQRT(pi)
+
+END SUBROUTINE shz_vec
+
+
+! ----------------------------------------------------------------------
+FUNCTION INDV(j,m,l)
+INTEGER :: INDV, j, m, l
+! v e k t o r o v y   i n d e x pre m=0,j
+INDV=(j*(j+1)/2+m)*3+l-j
+END FUNCTION INDV
+! ----------------------------------------------------------------------
+FUNCTION INDSmin(j,m)
+INTEGER :: INDSmin, j, m
+! s k a l a r n y  i n d e x  pre m=-j,j
+INDSmin=j*(j+1)+m+1
+END FUNCTION INDSmin
+! ----------------------------------------------------------------------
+FUNCTION INDS(j,m)
+INTEGER :: INDS, j, m
+! s k a l a r n y  i n d e x  pre m=0,j
+INDS=j*(j+1)/2+m+1
+END FUNCTION INDS
+! ----------------------------------------------------------------------
+FUNCTION INDT(j,m,l,k)
+INTEGER :: INDT, j, m, l, k
+! t e n z o r o v y i n d e x pre m=0,j
+INDT=(j+3)*(j-2)*9/2+17+m*9+k*k+l-j+k+1
+if (j==0.and.m==0.and.l==0.and.k==0) INDT=1
+if (j==0.and.m==0.and.l==1.and.k==1) INDT=2
+if (j==0.and.m==0.and.l==2.and.k==2) INDT=3
+if (j==1.and.m==0.and.l==1.and.k==0) INDT=4
+if (j==1.and.m==0.and.l==0.and.k==1) INDT=5
+if (j==1.and.m==0.and.l==1.and.k==1) INDT=6
+if (j==1.and.m==0.and.l==2.and.k==1) INDT=7
+if (j==1.and.m==0.and.l==1.and.k==2) INDT=8
+if (j==1.and.m==0.and.l==2.and.k==2) INDT=9
+if (j==1.and.m==0.and.l==3.and.k==2) INDT=10
+if (j==1.and.m==1.and.l==1.and.k==0) INDT=11
+if (j==1.and.m==1.and.l==0.and.k==1) INDT=12
+if (j==1.and.m==1.and.l==1.and.k==1) INDT=13
+if (j==1.and.m==1.and.l==2.and.k==1) INDT=14
+if (j==1.and.m==1.and.l==1.and.k==2) INDT=15
+if (j==1.and.m==1.and.l==2.and.k==2) INDT=16
+if (j==1.and.m==1.and.l==3.and.k==2) INDT=17
+END FUNCTION INDT
+! ----------------------------------------------------------------------
+FUNCTION INDVmin(j,m,l)
+INTEGER :: INDVmin, j, m, l
+! v e k t o r o v y   i n d e x pre m=-j,j
+INDVmin=(j*(j+1)+m)*3+l-j
+END FUNCTION INDVmin
+! ----------------------------------------------------------------------
+
+
+SUBROUTINE ninej0m(j1,j2,j3,j4,j6,j7,j8,nj)
+!spocita 9-j Wignerov symbol, pre j9=0 a j5=1 
+!        {j1,j2,j3}
+!        {j4,j5,j6}
+!        {j7,j8,j9}
+
+INTEGER, INTENT(IN) :: j1,j2,j3,j4,j6,j7,j8
+REAL(8) :: nj, sj
+
+    call SIXJ1(j1,j2,j3,j4,j7,sj)
+
+nj=(-1)**(j2+j3+j4+j7)/SQRT((2.D0*j3+1.D0)*(2.D0*j7+1.D0))*sj
+
+if (j3.ne.j6.or.j7.ne.j8) nj=0
+
+
+END SUBROUTINE ninej0m
+
+SUBROUTINE Genersg (krok,sg)                      !nageneruje velkosti integracnych uhlov sg
+
+INTEGER, INTENT(IN) :: krok
+REAL (8) :: sg(0:180/krok), theta
+INTEGER :: it
+
+sg(0)=(1-cos(krok*pi/180/2))*2*pi
+do it=1,180/krok-1
+        theta=(it+1/2.D0)*krok*pi/180
+        sg(it)= (1-cos(theta))*2*pi
+enddo
+
+do it=180/krok-1,1,-1
+        sg(it)=(sg(it)-sg(it-1))/(360/krok)
+enddo
+sg(0)=sg(0)/(360/krok)
+sg(180/krok)=sg(0)
+
+END SUBROUTINE Genersg
+
 !..................................................................
 SUBROUTINE HARMAN(NTH,JMAX,DATA,CRHS)
 !..................................................................
@@ -3625,6 +4065,1008 @@ subroutine solve_system_for_j1(number_of_layers, jmax, j, m, matrix_for_j1, cauc
 
 end subroutine
 
+subroutine calculate_global_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, t, radius, delta_r, cauchy_times_fluidity_2, cauchy, Q_in_time)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax, number_of_time_steps_for_deformaion, t
+    real*8 :: radius, delta_r
+    complex*16, intent(in) :: cauchy_times_fluidity_2(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3), cauchy(number_of_layers,5*(jmax*(jmax+1)/2+jmax)-3)
+    real*8, intent(inout) :: Q_in_time(number_of_time_steps_for_deformaion)
+
+    integer :: i, j, m
+    real*8 :: Qcum, fac
+    complex*16 :: t_comp, t_times_f_comp
+    real*8 :: Q(number_of_layers)
+
+    do i = 1, number_of_layers
+        Qcum = 0d0
+
+        j=1
+        do m=0, 1
+            fac = 2d0
+            if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
+
+            t_comp = cauchy(i, 3 * ((j * (j + 1)) / 2 + m)-1)
+            t_times_f_comp = cauchy_times_fluidity_2(i, 3 * ((j * (j + 1)) / 2 + m)-1)
+            Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+            t_comp = cauchy(i, 3 * ((j * (j + 1)) / 2 + m)+1)
+            t_times_f_comp = cauchy_times_fluidity_2(i, 3 * ((j * (j + 1)) / 2 + m)+1)
+
+            Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+        end do
+            
+    
+        do j = 2, jmax
+            do m = 0, j
+                fac = 2d0
+                if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
+                
+                ! Accumulate energy components from cauchy tensor
+                t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 3)
+                t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 3)
+
+                Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+                t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 4)
+                t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 4)
+
+                Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+                t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 5)
+                t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 5)
+
+                Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+                t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 6)
+                t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 6)
+
+                Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+                t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 7)
+                t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 7)
+
+                Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+
+            end do
+        end do
+    
+        Q(i) = Qcum
+    end do
+    
+    ! Apply the trapezoidal rule to approximate the integral
+    do m = 1, number_of_layers - 1
+        Q_in_time(t) = Q_in_time(t) + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
+    end do
+    
+    ! Output the result
+    print*, t, Q_in_time(t)
+
+end subroutine
+
+subroutine update_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid, dissipation)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax, number_of_time_steps_for_deformaion
+    complex*16, intent(in) :: cauchy(number_of_layers, 5*(jmax*(jmax+1)/2+jmax)-3)
+    complex*16, intent(in) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    real*8, intent(inout) :: averaged_dissipation_on_grid(number_of_layers, 360, 180)
+    complex*16, intent(inout) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+
+    integer :: max_scalar_index_2, max_scalar_index, jmax12, jmax3     ! The maximal indexes for harmonic series of a scalar, vector and a deviatoric tensor 
+    integer :: i, k, j, m, base_idx, INDT, jm
+    real*8 :: multiplicator
+
+    ! Declare arrays as allocatable
+    complex*16, allocatable :: cauchy_auxiliary(:)
+    complex*16 :: cummulated_series((jmax + 1) * (jmax + 2) / 2)
+
+    complex*16, allocatable :: xx(:), xy(:), xz(:)
+    complex*16, allocatable :: yx(:), yy(:), yz(:)
+    complex*16, allocatable :: zx(:), zy(:), zz(:)
+
+    real*8, allocatable :: data1(:,:), cummulated_data(:,:)
+
+    complex*16 coef(12000), crhs(12000)
+
+    complex*16 sh1(100000),sh2(100000),sh3(100000)
+
+    allocate(data1(360, 180), cummulated_data(360, 180))
+
+    ! Compute max indices
+    max_scalar_index_2 = (jmax + 3) * (jmax + 4) / 2
+
+    max_scalar_index = (jmax + 1) * (jmax + 2) / 2
+
+    ! Now allocate the arrays dynamically
+    allocate(cauchy_auxiliary(INDT(jmax, jmax, jmax + 2, 2)))
+
+    allocate(xx(max_scalar_index_2), xy(max_scalar_index_2), xz(max_scalar_index_2))
+    allocate(yx(max_scalar_index_2), yy(max_scalar_index_2), yz(max_scalar_index_2))
+    allocate(zx(max_scalar_index_2), zy(max_scalar_index_2), zz(max_scalar_index_2))
+
+    jmax12 = jmax
+    jmax3 = jmax
+
+    do i=1, number_of_layers
+
+        cauchy_auxiliary = 0.D0
+        data1 = 0.D0
+        cummulated_data = 0.D0
+        coef = 0
+        crhs = 0
+        cummulated_series = 0
+
+        j=1
+
+        ! cauchy_auxiliary(INDT(2,0,0,2))=cauchy(i,8)
+        ! cauchy_auxiliary(INDT(2,0,2,2))=cauchy(i,10)
+        ! cauchy_auxiliary(INDT(2,0,4,2))=cauchy(i,12)
+        ! cauchy_auxiliary(INDT(2,2,0,2))=cauchy(i,18)
+        ! cauchy_auxiliary(INDT(2,2,2,2))=cauchy(i,20)
+        ! cauchy_auxiliary(INDT(2,2,4,2))=cauchy(i,22)
+        do m=0, j
+
+            if (m==0) then
+                multiplicator = 1.0
+            else
+                multiplicator = 2.0
+            end if
+
+            base_idx = 3 * ((j * (j + 1)) / 2 + m)
+
+            cauchy_auxiliary(INDT(j,m,j,2)) = multiplicator*cauchy(i, base_idx-1)
+            cauchy_auxiliary(INDT(j,m,j+2,2)) = multiplicator*cauchy(i, base_idx+1)
+
+        end do
+
+        do j=2, jmax
+
+            do m=0, j
+
+                if (m==0) then
+                    multiplicator = 1.0
+                else
+                    multiplicator = 2.0
+                end if
+
+                base_idx = 5 * ((j * (j + 1)) / 2 + m)
+
+                cauchy_auxiliary(INDT(j,m,j-2,2)) = multiplicator*cauchy(i, base_idx-7)
+                cauchy_auxiliary(INDT(j,m,j-1,2)) = multiplicator*cauchy(i, base_idx-6)
+                cauchy_auxiliary(INDT(j,m,j,2)) = multiplicator*cauchy(i, base_idx-5)
+                cauchy_auxiliary(INDT(j,m,j+1,2)) = multiplicator*cauchy(i, base_idx-4)
+                cauchy_auxiliary(INDT(j,m,j+2,2)) = multiplicator*cauchy(i, base_idx-3)
+
+            end do
+
+        end do
+
+        call shz_tens(jmax, cauchy_auxiliary, xx, xy, xz, yx, yy, yz, zx, zy, zz)
+
+        do j=0, jmax
+
+            do m=1, j
+
+                k=j*(j+1)/2+m+1
+
+                xx(k) = xx(k)/2.0
+                yy(k) = yy(k)/2.0
+                zz(k) = zz(k)/2.0
+                xy(k) = xy(k)/2.0
+                xz(k) = xz(k)/2.0
+                yz(k) = yz(k)/2.0
+
+            end do
+
+        end do
+
+        ! call VCSUM(jmax12,xx,xx,jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     cummulated_series(k) = cummulated_series(k) + sh3(k)
+        ! end do
+
+        ! call VCSUM(jmax12,yy,yy,jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     cummulated_series(k) = cummulated_series(k) + sh3(k)
+        ! end do
+
+        ! call VCSUM(jmax12,zz,zz,jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     cummulated_series(k) = cummulated_series(k) + sh3(k)
+        ! end do
+
+        ! call VCSUM(jmax12,xy,xy,jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     cummulated_series(k) = cummulated_series(k) + 2*sh3(k)
+        ! end do
+
+        ! call VCSUM(jmax12,xz,xz,jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     cummulated_series(k) = cummulated_series(k) + 2*sh3(k)
+        ! end do
+
+        ! call VCSUM(jmax12,yz,yz,jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     cummulated_series(k) = cummulated_series(k) + 2*sh3(k)
+        ! end do
+
+        ! call VCSUM(jmax12,cummulated_series,fluidity_2(i,:),jmax3,sh3)
+
+        ! do k=1, max_scalar_index
+        !     dissipation(i,k) = dissipation(i,k) + sh3(k)*(1.0/(number_of_time_steps_for_deformaion-100))
+        ! end do
+
+
+        call HARMSY(180, jmax, xx, data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                cummulated_data(k, j) = cummulated_data(k, j) + data1(k, j)*data1(k, j)
+
+            end do
+
+        end do
+
+        call HARMSY(180, jmax, yy, data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                cummulated_data(k, j) = cummulated_data(k, j) + data1(k, j)*data1(k, j)
+
+            end do
+
+        end do
+
+        call HARMSY(180, jmax, zz, data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                cummulated_data(k, j) = cummulated_data(k, j) + data1(k, j)*data1(k, j)
+
+            end do
+
+        end do
+
+        call HARMSY(180, jmax, xy, data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                cummulated_data(k, j) = cummulated_data(k, j) + 2.0*data1(k, j)*data1(k, j)
+
+            end do
+
+        end do
+
+        call HARMSY(180, jmax, xz, data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                cummulated_data(k, j) = cummulated_data(k, j) + 2.0*data1(k, j)*data1(k, j)
+
+            end do
+
+        end do
+
+        call HARMSY(180, jmax, yz, data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                cummulated_data(k, j) = cummulated_data(k, j) + 2.0*data1(k, j)*data1(k, j)
+
+            end do
+
+        end do
+        
+
+        call HARMSY(180, jmax, fluidity_2(i,:), data1)
+
+        do j=1, 180
+
+            do k=1, 360
+
+                !print*, cummulated_data(k, j), data1(k,j),  cummulated_data(k, j)*data1(k,j)*(1.0/(number_of_time_steps_for_deformaion-100))
+
+                averaged_dissipation_on_grid(i, k, j) = averaged_dissipation_on_grid(i, k, j) + cummulated_data(k, j)*data1(k,j)*(1.0/(number_of_time_steps_for_deformaion-100))
+
+            end do
+
+        end do
+
+        !shz_tens(, xx, xy, xz, yx, yy, yz, zx, zy, zz)
+
+    end do
+
+
+end subroutine
+
+
+subroutine initial_explicit_euler_update(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, dissipation)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax
+    real*8, intent(in) :: heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p
+    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+    integer :: i, j, m, base_idx
+    complex*16 :: second_derivative, first_derivative, third_term, j1
+
+
+    do i=2, number_of_layers-1
+
+        do j=0, jmax
+
+            j1 = real(j)
+
+            do m=0, j
+
+                base_idx = j*(j+1)/2+m+1
+
+                second_derivative = (1.0/(delta_r*delta_r))*(log_temperature(i+1, base_idx)-2*log_temperature(i, base_idx)+log_temperature(i-1, base_idx))
+                first_derivative = (2.0/((radius+(i-1)*delta_r)*2.0*delta_r))*(log_temperature(i+1, base_idx) - log_temperature(i-1, base_idx))
+                third_term = - (j1*(j1+1))/((radius+(i-1)*delta_r)*(radius+(i-1)*delta_r))*log_temperature(i, base_idx)
+                temperature(i, base_idx) = temperature(i, base_idx) + heat_equation_delta_t*((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term) + heat_equation_delta_t*(1.0/(ice_density*c_p))*dissipation(i, base_idx)
+
+            end do
+
+        end do
+
+    end do
+
+end subroutine
+
+subroutine update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax
+    real*8, intent(in) :: heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p
+    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature_previous(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+    integer :: i, j, m, base_idx
+    complex*16 :: second_derivative, first_derivative, third_term, second_derivative_, first_derivative_, third_term_, first_part, second_part
+    real*8 :: j1
+
+    do i=2, number_of_layers-1
+
+        do j=0, jmax
+
+            j1 = real(j)
+
+            do m=0, j
+
+                base_idx = j*(j+1)/2+m+1
+
+                second_derivative = (1.0/(delta_r*delta_r))*(log_temperature(i+1, base_idx)-2*log_temperature(i, base_idx)+log_temperature(i-1, base_idx))
+                first_derivative = (2.0/((radius+(i-1)*delta_r)*2.0*delta_r))*(log_temperature(i+1, base_idx) - log_temperature(i-1, base_idx))
+                third_term = - (j1*(j1+1))/((radius+(i-1)*delta_r)*(radius+(i-1)*delta_r))*log_temperature(i, base_idx)
+                first_part = ((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term)
+                
+                second_derivative_ = (1.0/(delta_r*delta_r))*(log_temperature_previous(i+1, base_idx)-2*log_temperature_previous(i, base_idx)+log_temperature_previous(i-1, base_idx))
+                first_derivative_ = (2.0/((radius+(i-1)*delta_r)*2.0*delta_r))*(log_temperature_previous(i+1, base_idx) - log_temperature_previous(i-1, base_idx))
+                third_term_ = - (j1*(j1+1))/((radius+(i-1)*delta_r)*(radius+(i-1)*delta_r))*log_temperature_previous(i, base_idx)
+                second_part = ((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term)
+
+                temperature(i, base_idx) = temperature(i, base_idx) + heat_equation_delta_t*((3.0/2.0)*first_part - (1.0/2.0)*second_part) + (1.0/(ice_density*c_p))*dissipation(i, base_idx)*heat_equation_delta_t
+
+            end do
+
+        end do
+
+    end do
+
+end subroutine
+
+subroutine update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax
+    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature_previous(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+    integer :: i, k, l, m, max_scalar_index
+    
+    real*8, allocatable :: temperature_data(:,:), log_temperature_data(:,:)
+    complex*16 coef(12000),crhs(12000),coef1(12000)
+    allocate(temperature_data(360, 180), log_temperature_data(360, 180))
+
+    max_scalar_index = (jmax + 1) * (jmax + 2) / 2
+
+
+    do i=2, number_of_layers-1
+
+        do k=1, max_scalar_index
+
+            log_temperature_previous(i,k) = log_temperature(i,k)
+
+        end do
+
+
+        call HARMSY(180, jmax, temperature(i,:), temperature_data)
+
+        do l=1, 180
+
+            do m=1, 360
+
+                log_temperature_data(m, l) = DLOG(temperature_data(m, l))
+            end do
+
+        end do
+
+        call HARMAN(180,jmax,log_temperature_data,crhs)
+        call HARMLS(180,jmax,crhs,coef)
+
+        do k=1, max_scalar_index
+
+            log_temperature(i,k) = coef(k)
+
+        end do
+
+    end do
+
+end subroutine
+
+subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, temperature, folder_name)
+    implicit none
+
+    ! Inputs
+    integer, intent(in) :: number_of_layers, jmax, t, k, number_of_steps_for_heat_equation
+    real*8, intent(in) :: heat_equation_delta_t, delta_r
+    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
+
+    ! Local variables
+    real*8, allocatable :: data(:,:)
+    integer :: l, m, i
+    character(len=100) :: file_path_1, file_path_2, file_path_3, file_path_4, file_path_5
+    character(len=100) :: file_path_6, file_path_7, file_path_8, file_path_9
+
+    ! Allocate memory for data
+    allocate(data(360, 180))
+
+    ! Generate file paths inside the folder
+    file_path_1 = trim(folder_name) // "/temperature1.txt"
+    file_path_2 = trim(folder_name) // "/temperature2.txt"
+    file_path_3 = trim(folder_name) // "/temperature3.txt"
+
+    file_path_4 = trim(folder_name) // "/temperature_0_0.txt"
+    file_path_5 = trim(folder_name) // "/temperature_90_0.txt"
+    file_path_6 = trim(folder_name) // "/temperature_90_90.txt"
+    file_path_7 = trim(folder_name) // "/temperature_90_180.txt"
+    file_path_8 = trim(folder_name) // "/temperature_90_270.txt"
+    file_path_9 = trim(folder_name) // "/temperature_180_0.txt"
+
+    ! Process and write temperature1 data
+    call HARMSY(180, jmax, temperature(37,:), data)
+    open(unit=11, file=trim(file_path_1), status="old", action="write", position="append")
+
+    write(11, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(11, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(11)
+
+    ! Process and write temperature2 data
+    call HARMSY(180, jmax, temperature(25,:), data)
+    open(unit=12, file=trim(file_path_2), status="old", action="write", position="append")
+
+    write(12, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(12, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(12)
+
+    ! Process and write temperature3 data
+    call HARMSY(180, jmax, temperature(12,:), data)
+    open(unit=13, file=trim(file_path_3), status="old", action="write", position="append")
+
+    write(13, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(13, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(13)
+
+    open(unit=21, file=trim(file_path_4), status="old", action="write", position="append")
+    open(unit=22, file=trim(file_path_5), status="old", action="write", position="append")
+    open(unit=23, file=trim(file_path_6), status="old", action="write", position="append")
+    open(unit=24, file=trim(file_path_7), status="old", action="write", position="append")
+    open(unit=25, file=trim(file_path_8), status="old", action="write", position="append")
+    open(unit=26, file=trim(file_path_9), status="old", action="write", position="append")
+
+    write(21, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    write(22, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    write(23, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    write(24, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    write(25, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    write(26, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+
+
+    do i = 1, number_of_layers
+
+        call HARMSY(180, jmax, temperature(i,:), data)
+
+        write(21, *) (i-1)*delta_r/(1000.0), data(1,180)
+        write(22, *) (i-1)*delta_r/(1000.0), data(1,90)
+        write(23, *) (i-1)*delta_r/(1000.0), data(91,90)
+        write(24, *) (i-1)*delta_r/(1000.0), data(191,90)
+        write(25, *) (i-1)*delta_r/(1000.0), data(271,90)
+        write(26, *) (i-1)*delta_r/(1000.0), data(1,1)
+
+    end do
+
+
+    close(21)
+    close(22)
+    close(23)
+    close(24)
+    close(25)
+    close(26)
+
+    ! Deallocate memory
+    deallocate(data)
+
+end subroutine write_temperature_data
+
+subroutine write_dissipation(number_of_layers, jmax, k, number_of_steps_for_heat_equation, heat_equation_delta_t, dissipation, Total_averaged_dissipation, folder_name)
+    implicit none
+
+    ! Inputs
+    integer, intent(in) :: number_of_layers, jmax, k, number_of_steps_for_heat_equation
+    real*8, intent(in) :: heat_equation_delta_t
+    complex*16, intent(inout) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    real*8, intent(in) :: Total_averaged_dissipation
+    character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
+
+    ! Local variables
+    real*8, allocatable :: data(:,:)
+    integer :: l, m
+    character(len=100) :: file_path_1, file_path_2, file_path_3, file_path_total
+
+    ! Allocate memory for data
+    allocate(data(360, 180))
+
+    ! Generate file paths inside the folder
+    file_path_1 = trim(folder_name) // "/dissipation1.txt"
+    file_path_2 = trim(folder_name) // "/dissipation2.txt"
+    file_path_3 = trim(folder_name) // "/dissipation3.txt"
+    file_path_total = trim(folder_name) // "/total_dissipation.txt"
+
+    ! Process and write dissipation1 data
+    call HARMSY(180, jmax, dissipation(37,:), data)
+    open(unit=14, file=trim(file_path_1), status="old", action="write", position="append")
+
+    write(14, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(14, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(14)
+
+    ! Process and write dissipation2 data
+    call HARMSY(180, jmax, dissipation(25,:), data)
+    open(unit=15, file=trim(file_path_2), status="old", action="write", position="append")
+
+    write(15, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(15, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(15)
+
+    ! Process and write dissipation3 data
+    call HARMSY(180, jmax, dissipation(16,:), data)
+    open(unit=16, file=trim(file_path_3), status="old", action="write", position="append")
+
+    write(16, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(16, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(16)
+
+    ! Write total dissipation value
+    open(unit=17, file=trim(file_path_total), status="old", action="write", position="append")
+    write(17, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9), Total_averaged_dissipation/(1.0E9)
+    close(17)
+
+    ! Deallocate memory
+    deallocate(data)
+
+end subroutine write_dissipation
+
+subroutine calculate_fluidity_2(number_of_layers, jmax, A, B, temperature, fluidity_2)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax
+    real*8, intent(in) :: A, B
+    complex*16, intent(in) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+    real*8, allocatable :: temperature_data(:,:), fluidity_2_data(:,:)
+    integer :: l, m, i, max_scalar_index
+    complex*16 coef(12000),crhs(12000),coef1(12000)
+
+    max_scalar_index = (jmax + 1) * (jmax + 2) / 2
+
+    allocate(temperature_data(360, 180), fluidity_2_data(360, 180))
+
+
+    do i=1, number_of_layers
+
+        call HARMSY(180, jmax, temperature(i,:), temperature_data)
+
+        do l=1, 180
+
+            do m=1, 360
+    
+                fluidity_2_data(m,l) = 1.0/(2.0*A*dexp(-B*temperature_data(m,l)))
+    
+            end do
+    
+        end do
+
+        call HARMAN(180,jmax,fluidity_2_data,crhs)
+        call HARMLS(180,jmax,crhs,coef)
+
+        do l=1, max_scalar_index
+
+            fluidity_2(i,l) = coef(l)
+
+        end do
+
+    end do
+
+end subroutine
+
+
+subroutine write_fluidity_2_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, fluidity_2, folder_name)
+    implicit none
+
+    ! Inputs
+    integer, intent(in) :: number_of_layers, jmax, t, k, number_of_steps_for_heat_equation
+    real*8, intent(in) :: heat_equation_delta_t
+    complex*16, intent(inout) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
+
+    ! Local variables
+    real*8, allocatable :: data(:,:)
+    integer :: l, m
+    character(len=100) :: file_path_1, file_path_2, file_path_3
+
+    ! Allocate memory for data
+    allocate(data(360, 180))
+
+    ! Generate file paths inside the folder
+    file_path_1 = trim(folder_name) // "/fluidity_21.txt"
+    file_path_2 = trim(folder_name) // "/fluidity_22.txt"
+    file_path_3 = trim(folder_name) // "/fluidity_23.txt"
+
+    ! Process and write fluidity_21 data
+    call HARMSY(180, jmax, fluidity_2(37,:), data)
+    open(unit=18, file=trim(file_path_1), status="old", action="write", position="append")
+
+    write(18, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(18, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(18)
+
+    ! Process and write fluidity_22 data
+    call HARMSY(180, jmax, fluidity_2(25,:), data)
+    open(unit=19, file=trim(file_path_2), status="old", action="write", position="append")
+
+    write(19, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(19, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(19)
+
+    ! Process and write fluidity_23 data
+    call HARMSY(180, jmax, fluidity_2(12,:), data)
+    open(unit=20, file=trim(file_path_3), status="old", action="write", position="append")
+
+    write(20, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+    do l = 1, 180
+        do m = 1, 360
+            write(20, *) 180-l + 0.5, m-1, data(m,l)
+        end do
+    end do
+    close(20)
+
+    ! Deallocate memory
+    deallocate(data)
+
+end subroutine write_fluidity_2_data
+
+subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
+    implicit none
+
+    ! Inputs
+    integer, intent(in) :: number_of_layers, jmax
+    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature_previous(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+
+    ! Local variables
+    real*8, allocatable :: temperature_data(:,:), log_temperature_data(:,:)
+    integer :: j, m, i, k, max_scalar_index
+    integer :: q, w
+    complex*16 :: coef_
+    character(len=100) :: file_path_1, file_path_2, file_path_3
+    complex*16 coef(12000),crhs(12000),coef1(12000)
+
+    max_scalar_index = (jmax + 1) * (jmax + 2) / 2
+
+    ! Allocate memory for data
+    allocate(temperature_data(360, 180), log_temperature_data(360, 180))
+
+    open(1,file='coefin.dat') ! cteni SH koeficientu ze souboru
+
+    do j=0,8 ! cyklus pres stupen
+          do m=0,j    ! cyklus pres rad
+              read(1,*) q, w, coef_
+              i=j*(j+1)/2+m+1
+              temperature(number_of_layers, i) = coef_
+          enddo
+    enddo
+
+    close(1)
+
+    temperature(1,1) = 957.1251
+
+    do i=2, number_of_layers - 1
+
+        do k=1, max_scalar_index
+
+            temperature(i,k) = ((((number_of_layers-1)-(i-1))*temperature(1,k)+(i-1)*temperature(number_of_layers,k))/(number_of_layers-1))
+
+        end do
+
+    end do
+
+    do i=1, number_of_layers
+
+        call HARMSY(180, jmax, temperature(i,:), temperature_data)
+
+        do j=1, 180
+
+            do m=1, 360
+
+                log_temperature_data(m, j) = DLOG(temperature_data(m, j))
+
+            end do
+
+        end do
+        
+        call HARMAN(180,jmax,log_temperature_data,crhs)
+        call HARMLS(180,jmax,crhs,coef)
+
+        do k=1, max_scalar_index
+
+            log_temperature(i,k) = coef(k)
+            log_temperature_previous(i,k) = coef(k)
+
+
+        end do
+
+    end do
+
+end subroutine set_up_initial_values_for_temperature_and_log_temperature
+
+subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax
+    real*8 :: radius, delta_r
+    real*8 averaged_dissipation_on_grid(number_of_layers,360, 180)
+    complex*16 :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+    complex*16 :: sqrt_dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    real*8 :: sqrt_on_grid(360, 180), data1(360,180)
+
+    complex*16 coef(12000),crhs(12000),coef1(12000)
+
+    integer :: i, j, m, k, o, l
+    real*8 :: Qcum, fac
+    real*8 :: Q(number_of_layers)
+    real*8 :: Q_total
+    real*8 :: theta, weight, pi
+
+    Q_total=0
+    sqrt_dissipation=0
+
+    do i=1, number_of_layers
+
+        sqrt_on_grid = 0
+
+        do j=1, 180
+
+            do k=1, 360
+
+                sqrt_on_grid(k, j) = dsqrt(averaged_dissipation_on_grid(i,k,j))
+
+            end do
+
+        end do
+
+        call HARMAN(180,jmax,sqrt_on_grid,crhs)
+        call HARMLS(180,jmax,crhs,coef)
+
+        do j=0,jmax
+            do m=0,j
+            o=j*(j+1)/2+m+1
+            sqrt_dissipation(i,o) = coef(o)
+            enddo
+        enddo
+
+    end do
+
+    do i = 1, number_of_layers
+        Qcum = 0d0            
+    
+        do j = 0, jmax
+            do m = 0, j
+                o=j*(j+1)/2+m+1
+                fac = 2d0
+                if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
+
+                Qcum = Qcum + fac*(dreal(sqrt_dissipation(i,o))**2 + aimag(sqrt_dissipation(i,o))**2)
+                
+            end do
+        end do
+    
+        Q(i) = Qcum
+    end do
+    
+    ! Apply the trapezoidal rule to approximate the integral
+    do m = 1, number_of_layers - 1
+        Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
+    end do
+    
+    ! Output the result
+    print*, 'The total dissipation from grid synthesiz', Q_total
+
+    ! Q_total=0
+
+    ! pi = 4.0d0 * datan(1.0d0)
+
+    ! ! Loop over radial layers
+    ! do i = 1, number_of_layers
+    !     Qcum = 0.0d0
+
+    !     call HARMSY(180, jmax, dissipation(i,:), data1)
+    !     ! do k=1, (jmax + 1) * (jmax + 2) / 2
+    !     !     print*, i, k, dissipation(i,k)
+    !     ! end do
+
+
+    !     ! Loop over latitude and longitude
+    !     do k = 1, 180
+    !         theta = (k - 0.5) * (pi / 180.0)  ! Midpoint latitude in radians
+    !         weight = dsin(theta)  ! Proper weight factor for latitude integration
+
+    !         do l = 1, 360
+    !             Qcum = Qcum + data1(l, k) * &
+    !                 (pi / 180.0) * (2.0d0 * pi / 360.0) * weight
+    !         end do
+    !     end do
+
+    !     Q(i) = Qcum
+    ! end do
+    
+    ! ! Apply the trapezoidal rule to approximate the integral
+    ! do m = 1, number_of_layers - 1
+    !     Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
+    ! end do
+
+
+    
+    ! ! Output the result
+    ! print*, 'The total dissipation from integral of averaged dissipation', Q_total
+
+end subroutine
+
+subroutine update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
+    implicit none
+
+    ! Inputs
+    integer, intent(in) :: jmax, number_of_layers
+    real*8, intent(in) :: delta_t, eta, mu
+    complex*16, intent(inout) :: cauchy_integral(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16, intent(in) :: cauchy(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+    complex*16, intent(in) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: cauchy_times_fluidity_2(number_of_layers, 5 * (jmax * (jmax + 1) / 2 + jmax) - 3)
+
+    ! Local variables
+    integer :: k, max_tensor_index, max_scalar_index, i
+    complex*16, allocatable :: cajm(:), ctjml(:), cjml(:)
+    real :: start_time, end_time, elapsed_time
+
+    ! Constants
+    max_tensor_index = 5 * (jmax * (jmax + 1) / 2 + jmax) - 3
+    max_scalar_index = (jmax + 1) * (jmax + 2) / 2
+
+    ! Allocate arrays dynamically
+    allocate(cjml(2*max_tensor_index))
+    allocate(cajm(2*max_scalar_index))
+    allocate(ctjml(2*max_tensor_index))
+
+    ! Initialize arrays to debug-friendly values
+    cajm = (0.0d0, 0.0d0)  ! Non-zero imaginary part for debug visibility
+    ctjml = (0.0d0, 0.0d0)  ! Non-zero real part for debug visibility
+    cjml = (0.0d0, 0.0d0)   ! Non-zero values for both parts
+
+    call CPU_TIME(start_time)
+
+    !Main loop
+    do k = 1, number_of_layers
+
+        ! Fill cajm with fluidity values
+        cajm(:max_scalar_index) = fluidity_2(k, :max_scalar_index)
+
+        ! Copy cauchy values for the current layer to ctjml
+        ctjml(:max_tensor_index) = cauchy(k, :max_tensor_index)
+
+        ! Call VCST with the relevant slice directly
+        call VCST(jmax, cajm, ctjml, cjml)
+
+        ! Write calculated data to the cauchy_times_fluidity_2 tensor
+
+        cauchy_times_fluidity_2(k, :) = cjml
+
+    end do
+
+    call CPU_TIME(end_time)
+
+    elapsed_time = end_time - start_time
+
+    print*, "Elapsed time inside the funcion :", elapsed_time, "seconds"
+
+    deallocate(cajm, ctjml, cjml)
+
+end subroutine
+
+
 ! This program simulates the deformation of Jupiter's moon Europa
 program Europa_simulation
     implicit none   ! Require all variables to be explicitly declared
@@ -3635,9 +5077,12 @@ program Europa_simulation
 
     ! The length of the discrete time step
     real*8, parameter :: delta_t=3.551181*24*36                         ! This is 0.01 of the period of the Europa's revolution around Jupiter, the period is 3.551181 days
+    real*8, parameter :: heat_equation_delta_t=2E10
 
+    integer, parameter :: number_or_total_rounds=100
     ! Number of time steps, determines the length of the simulation
-    integer, parameter :: number_of_time_steps=1000
+    integer, parameter :: number_of_time_steps_for_deformaion=200
+    integer, parameter :: number_of_steps_for_heat_equation=200
     
     ! These are the physical paramteres for Europa's icy layer, the main parameters of the simulation
     real*8, parameter :: radius = 1531000.0d0                           ! The inner radius of Europa in meters
@@ -3650,6 +5095,11 @@ program Europa_simulation
     real*8, parameter :: delta_rho = 80.0d0                             ! Difference between density of water and ice in kg/m^3
     real*8, parameter :: angular_speed = 2.047827249E-5                 ! Angular speed of the revolution around Jupiter in rad/s
     real*8, parameter :: excentricity = 0.009                           ! Eccentricity of Europa's orbit
+    real*8, parameter :: k_0 = 651
+    real*8, parameter :: c_p = 2108
+    real*8, parameter :: A = 9.273E19
+    real*8, parameter :: B = 5.033E-2
+
 
     real*8, parameter :: delta_r = thickness / (number_of_layers - 1)   ! Radial distance between layers
 
@@ -3671,31 +5121,39 @@ program Europa_simulation
 
     complex*16, allocatable :: radial_displacement(:,:)                 ! The harmonic series of the radial displacement at the outer boundary, mainly used for benchmark and debugging purposes, two indeces first order(!starting at 1) and second degree(!starting at one)
 
-    real*8, allocatable :: Q(:)                                         ! The dissipation (heat production) defined at layers, one index over all layers
     real*8, allocatable :: Q_in_time(:)                                 ! The total dissipation (heat production) in the whole ice crust as a function of time, each dimension is a time step
+    real*8 :: Total_averaged_dissipation                                ! This is the total averaged dissipation that is averaged over few periods of revolution of Europa around Jupiter
+    complex*16, allocatable :: dissipation(:,:)                         ! The harmonic series of the dissipation/heating, at each layer we have a harmonic series
+
+    complex*16, allocatable :: temperature(:,:)
+    complex*16, allocatable :: log_temperature(:,:)
+    complex*16, allocatable :: log_temperature_previous(:,:)
+
+    real*8, allocatable :: averaged_dissipation_on_grid(:,:,:)
 
     ! Loop variables and other results
-    integer :: t, j, i, m                                               ! Integer variables used in do loops
+    integer :: t, j, i, m, k                                            ! Integer variables used in do loops
     real*8 :: j1                                                        ! the real value of the integer degree j used in filling the matrices of linear systems
 
-    ! These are used in dissipation calculation
-    real*8 :: fac, Qcum                                                 ! fac is either 1 or 2, it's used in the dissipation calculation to adjust for the coefficients with -m
-    complex*16 :: t_comp, t_times_f_comp                                ! the current selested cauchy stress and cauchy_times_fluidity coefficients used in the dissipation calculation
-
     ! Used while reading fluidity values from a file
-    integer :: q_, w_, e_                                               ! just some randomm variables used only while loading the coefficinets for the fluidity from a file
-    complex*16 :: coef                                                  ! An auxiliary variable used while loading fluidity coefficients from a file
+    integer :: q_, w_, e_, o, base_idx                                               ! just some randomm variables used only while loading the coefficinets for the fluidity from a file
+    complex*16 :: coef_                                                  ! An auxiliary variable used while loading fluidity coefficients from a file
 
     integer :: max_scalar_index, max_vector_index, max_tensor_index     ! The maximal indexes for harmonic series of a scalar, vector and a deviatoric tensor 
 
     logical :: test                                                     ! A boolean variable, whether to test or not test the solution of equations, if true then tests of equation satisfaction are run
     logical :: write_deformation_data                                   ! A boolean variable, whether to write or not some simulated data to a file, if true then data of radial displacement at boundary are written to a file in a folder
+    logical :: write_simulation_data
 
     ! This variables are for writing of data to a file
     character(len=50) :: folder_name
     character(len=8)  :: date
     character(len=10) :: time
     integer, dimension(8) :: values
+
+    complex*16 coef(12000),crhs(12000),coef1(12000)
+
+    real :: start_time, end_time, elapsed_time
 
     max_scalar_index = (jmax + 1) * (jmax + 2) / 2
     max_vector_index = 3 * (jmax * (jmax + 1) / 2 + jmax) + 1
@@ -3718,11 +5176,19 @@ program Europa_simulation
 
     allocate(radial_displacement(jmax + 1, jmax + 1))
 
-    allocate(Q_in_time(number_of_time_steps))
-    allocate(Q(number_of_layers))
+    allocate(Q_in_time(number_of_time_steps_for_deformaion))
+    allocate(dissipation(number_of_layers, max_scalar_index))
+
+    allocate(temperature(number_of_layers, max_scalar_index))
+    allocate(log_temperature(number_of_layers, max_scalar_index))
+    allocate(log_temperature_previous(number_of_layers, max_scalar_index))
+
+    allocate(averaged_dissipation_on_grid(number_of_layers, 360, 180))
+
 
     test = .FALSE.
     write_deformation_data = .FALSE.
+    write_simulation_data = .TRUE.
 
     if (write_deformation_data) then
 
@@ -3746,6 +5212,65 @@ program Europa_simulation
 
     end if
 
+    if (write_simulation_data) then
+        ! Get the current date and time
+        call date_and_time(date, time, values=values)
+
+        ! Create timestamp in the format YYYYMMDD_HHMMSS
+        write(folder_name, '(I4.4,I2.2,I2.2,"_",I2.2,I2.2,I2.2)') &
+            values(1), values(2), values(3), values(5), values(6), values(7)
+
+        ! Append folder description
+        folder_name = trim(folder_name) // "_simulation_data"
+
+        ! Create the directory
+        call system("mkdir -p " // trim(folder_name))
+
+        print *, "Folder created: ", trim(folder_name)
+
+        ! Open and close the required files inside the created folder
+        open(unit=11, file=trim(folder_name)//"/temperature1.txt", status="replace", action="write")
+        close(11)
+        open(unit=12, file=trim(folder_name)//"/temperature2.txt", status="replace", action="write")
+        close(12)
+        open(unit=13, file=trim(folder_name)//"/temperature3.txt", status="replace", action="write")
+        close(13)
+
+        open(unit=14, file=trim(folder_name)//"/dissipation1.txt", status="replace", action="write")
+        close(14)
+        open(unit=15, file=trim(folder_name)//"/dissipation2.txt", status="replace", action="write")
+        close(15)
+        open(unit=16, file=trim(folder_name)//"/dissipation3.txt", status="replace", action="write")
+        close(16)
+
+        open(unit=17, file=trim(folder_name)//"/total_dissipation.txt", status="replace", action="write")
+        close(17)
+
+        open(unit=18, file=trim(folder_name)//"/fluidity_21.txt", status="replace", action="write")
+        close(18)
+        open(unit=19, file=trim(folder_name)//"/fluidity_22.txt", status="replace", action="write")
+        close(19)
+        open(unit=20, file=trim(folder_name)//"/fluidity_23.txt", status="replace", action="write")
+        close(20)
+
+        open(unit=21, file=trim(folder_name)//"/temperature_0_0.txt", status="replace", action="write")
+        close(21)
+        open(unit=22, file=trim(folder_name)//"/temperature_90_0.txt", status="replace", action="write")
+        close(22)
+        open(unit=22, file=trim(folder_name)//"/temperature_90_90.txt", status="replace", action="write")
+        close(23)
+        open(unit=24, file=trim(folder_name)//"/temperature_90_180.txt", status="replace", action="write")
+        close(24)
+        open(unit=25, file=trim(folder_name)//"/temperature_90_270.txt", status="replace", action="write")
+        close(25)
+        open(unit=26, file=trim(folder_name)//"/temperature_180_0.txt", status="replace", action="write")
+        close(26)
+
+        print *, "Files successfully created in folder: ", trim(folder_name)
+    else
+        print *, "File writing is disabled."
+    end if
+
     ! Initialize arrays with zero values
     displacement = 0.0d0
     cauchy = 0.0d0
@@ -3761,193 +5286,231 @@ program Europa_simulation
     matrix_for_j1 = 0.0d0
     toroidial_matrix = 0.0d0
     
-    !!!!!!!
-    radial_displacement = 0.0d0
     Q_in_time = 0.0d0
-    Qcum = 0.0d0
-    t_comp = 0
-    Q = 0.0d0
-    !!!!!!
+    Total_averaged_dissipation = 0.0D0
+    dissipation = 0.D0
+    temperature = 0.D0
+    log_temperature = 0.D0
+    log_temperature_previous = 0.D0
 
     !!!!!! load prepared fluidity from a file
     !!!!!! This will be most likely changed in the future as we want to calculate the fluidity from the temperature, this is an example
-    open(unit=10, file='fluid2', status='old')
+    open(unit=10, file='visc', status='old')
 
 
-    do i=1, number_of_layers
 
-        do j=0, jmax
+    ! do j=0, 16
 
-            read(10, *) q_, w_, e_
-            read(10, *) coef
-            fluidity_2(number_of_layers - i + 1, j*(j+1)/2 + 1) = coef
+    !     do m=0, j
 
-        end do
+    !         base_idx = j*(j+1)/2+m+1
 
-    end do
+    !         read(10, *) q_, w_, coef_
 
-    close(10)
+    !         do i=1, number_of_layers
+    !             fluidity_2(number_of_layers - i + 1, base_idx) = coef_/2.0
+    !         end do
 
-    do i=1, (jmax + 1) * (jmax + 2) / 2
+    !     end do
 
-        print*, i, fluidity_2(1, i)
+    ! end do
 
-    end do
-    !!!!!!
+    ! close(10)
+
+    ! do i=1, number_of_layers
+
+    !     fluidity_2(i,1) = 2*dsqrt(4.D0*datan(1.D0))*1/(2.0*eta)
+
+    ! end do
+
+    call set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
 
     call GNDD0(jmax)
 
-    ! Main simulation loop over time steps, careful to number_of_time_steps - 1
-    do t=0,number_of_time_steps-1
+    do k=1, number_or_total_rounds
 
-        call calculate_forces(number_of_layers, t, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
+        print*, "Running total round:", k
 
-        call update_cauchy_integral(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
+        dissipation = 0
+        Q_in_time = 0
+        Total_averaged_dissipation = 0
+        averaged_dissipation_on_grid = 0
 
-        j=1
-
-        do m=0,1
-
-            call fill_matrix_for_j1(number_of_layers, matrix_for_j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
-
-            call solve_system_for_j1(number_of_layers, jmax, j, m, matrix_for_j1, cauchy_integral, cauchy, cauchy_isotropic, displacement)
-
-        end do
-
-        ! Loop over each harmonic degree 'j'
-        do j=2,jmax
-
-            j1 = real(j)
-
-            call fill_matrix(number_of_layers, matrix, j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
-
-            call fill_toroidial_matrix(number_of_layers, toroidial_matrix, j1, mu, radius, delta_r)
-
-            ! Loop over each order 'm' for the current degree 'j'
-            do m=0,j
-
-                ! Solve the linear system for the current harmonic order
-                call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
-
-                call solve_toroidial_system(number_of_layers, jmax, j, m, toroidial_matrix, cauchy_integral, cauchy, displacement)
-
-            end do
-        end do
-
-        if (test) then
-            
-            print *
-            print '(A, I0)', "Running tests at time step ", t
-
-            call test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, ice_density, surface_g, bottom_g, delta_rho, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
-
+        if (write_simulation_data) then
+            call write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, temperature, folder_name)
         end if
 
-        if (write_deformation_data) then
+        call calculate_fluidity_2(number_of_layers, jmax, A, B, temperature, fluidity_2)
 
-            call calculate_radial_displacement_at_layer(100, jmax, number_of_layers, displacement, radial_displacement)
-
-            open(unit=10, file=trim(folder_name)//"/displacement101.txt", status="old", action="write", position="append")
-            ! Write time step
-            write(10, *) t * delta_t
-            ! Write harmonic coefficients (radial displacement)
-            do j = 0, jmax
-                do m = 0, j
-                    write(10,*) j, m, real(radial_displacement(j+1, m+1)), aimag(radial_displacement(j+1, m+1))
-                end do
-            end do
-            close(10)
-        
-            print *, "Radial displacement data written to: ", trim(folder_name)//"/displacement101.txt"
-        
-            
+        if (write_simulation_data) then
+            call write_fluidity_2_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, fluidity_2, folder_name)
         end if
 
-        !!!!!!!!!!!!!
-        ! Calculation of the heating, this part will be most likely rewritten
+        ! Main simulation loop over time steps, careful to number_of_time_steps - 1
+        do t=0,number_of_time_steps_for_deformaion-1
 
-        if (t>0) then
+            call CPU_TIME(end_time)
 
-            call calculate_global_dissipation(cauchy_times_fluidity_2, cauchy, Q_in_time)
+            elapsed_time = end_time - start_time
 
-            do i = 1, number_of_layers
-                Qcum = 0d0
+            print*, "Elapsed time in one cycle :", elapsed_time, "seconds"
 
-                j=1
-                do m=0, 1
-                    fac = 2d0
-                    if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
+            call CPU_TIME(start_time)
 
-                    t_comp = cauchy(i, 3 * ((j * (j + 1)) / 2 + m)-1)
-                    t_times_f_comp = cauchy_times_fluidity_2(i, 3 * ((j * (j + 1)) / 2 + m)-1)
-                    Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+            call calculate_forces(number_of_layers, t, volume_force, bottom_force, radius, delta_r, angular_speed, delta_t, ice_density, delta_rho, excentricity)
 
-                    t_comp = cauchy(i, 3 * ((j * (j + 1)) / 2 + m)+1)
-                    t_times_f_comp = cauchy_times_fluidity_2(i, 3 * ((j * (j + 1)) / 2 + m)+1)
+            call update_cauchy_integral(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
 
-                    Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
+            j=1
+
+            do m=0,1
+
+                call fill_matrix_for_j1(number_of_layers, matrix_for_j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
+
+                call solve_system_for_j1(number_of_layers, jmax, j, m, matrix_for_j1, cauchy_integral, cauchy, cauchy_isotropic, displacement)
+
+            end do
+
+            ! Loop over each harmonic degree 'j'
+            do j=2,jmax
+
+                j1 = real(j)
+
+                call fill_matrix(number_of_layers, matrix, j1, mu, ice_density, radius, delta_r, delta_rho, surface_g, bottom_g)
+
+                call fill_toroidial_matrix(number_of_layers, toroidial_matrix, j1, mu, radius, delta_r)
+
+                ! Loop over each order 'm' for the current degree 'j'
+                do m=0,j
+
+                    ! Solve the linear system for the current harmonic order
+                    call solve_linear_system(number_of_layers, jmax, j, m, matrix, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
+
+                    call solve_toroidial_system(number_of_layers, jmax, j, m, toroidial_matrix, cauchy_integral, cauchy, displacement)
 
                 end do
-                    
-            
-                do j = 2, jmax
+            end do
+
+            if (test) then
+                
+                print *
+                print '(A, I0)', "Running tests at time step ", t
+
+                call test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, ice_density, surface_g, bottom_g, delta_rho, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
+
+            end if
+
+            if (write_deformation_data) then
+
+                call calculate_radial_displacement_at_layer(number_of_layers, jmax, number_of_layers, displacement, radial_displacement)
+
+                open(unit=10, file=trim(folder_name)//"/displacement101.txt", status="old", action="write", position="append")
+                ! Write time step
+                write(10, *) t * delta_t
+                ! Write harmonic coefficients (radial displacement)
+                do j = 0, jmax
                     do m = 0, j
-                        fac = 2d0
-                        if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
-                        
-                        ! Accumulate energy components from cauchy tensor
-                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 3)
-                        t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 3)
-
-                        Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
-
-                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 4)
-                        t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 4)
-
-                        Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
-
-                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 5)
-                        t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 5)
-
-                        Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
-
-                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 6)
-                        t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 6)
-
-                        Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
-
-                        t_comp = cauchy(i, 5 * (j * (j + 1) / 2 + m) - 7)
-                        t_times_f_comp = cauchy_times_fluidity_2(i, 5 * (j * (j + 1) / 2 + m) - 7)
-
-                        Qcum = Qcum + fac * (dreal(t_comp)*dreal(t_times_f_comp) + dimag(t_comp)*dimag(t_times_f_comp))
-
+                        write(10,*) j, m, real(radial_displacement(j+1, m+1)), aimag(radial_displacement(j+1, m+1))
                     end do
                 end do
+                close(10)
             
-                Q(i) = Qcum
-            end do
+                print *, "Radial displacement data written to: ", trim(folder_name)//"/displacement101.txt"
             
-            ! Initialize Q_total(t) before accumulation
-            Q_in_time(t) = 0d0
-            
-            ! Apply the trapezoidal rule to approximate the integral
-            do m = 1, number_of_layers - 1
-                Q_in_time(t) = Q_in_time(t) + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
-            end do
-            
-            ! Output the result
-            print*, t, Q_in_time(t)
+                
+            end if
 
+            !call update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
+
+
+            if (t>0) then
+
+                call calculate_global_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, t, radius, delta_r, cauchy_times_fluidity_2, cauchy, Q_in_time)
+
+            end if
+            
+            if (t>99) then
+
+                Total_averaged_dissipation = Total_averaged_dissipation + Q_in_time(t)*(1.0/(number_of_time_steps_for_deformaion-100))
+
+                print*, "Total averaged dissipation:", Total_averaged_dissipation
+
+                ! Check if Total_averaged_dissipation is NaN or negative
+                if (Total_averaged_dissipation /= Total_averaged_dissipation .or. Total_averaged_dissipation < 0.0) then
+                    print*, "Error: Total averaged dissipation is NaN or negative. Terminating program."
+                    stop
+                end if
+
+                call update_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid, dissipation)
+
+                !!!!!!
+                !call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+                !!!!!!
+            end if
+
+        end do
+
+        do i=1, number_of_layers
+
+
+        call HARMAN(180,jmax,averaged_dissipation_on_grid(i,:,:),crhs)
+        call HARMLS(180,jmax,crhs,coef)
+
+        do j=0,jmax
+            do m=0,j
+            o=j*(j+1)/2+m+1
+            dissipation(i,o) = coef(o)
+            enddo
+        enddo
+
+        end do
+
+!!!!!!!
+        !call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid)
+!!!!!!!
+
+        if (write_simulation_data) then
+            call write_dissipation(number_of_layers, jmax, k, number_of_steps_for_heat_equation, heat_equation_delta_t, dissipation, Total_averaged_dissipation, folder_name)
         end if
+
+        call initial_explicit_euler_update(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, dissipation)
+
+        call update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
+
+        do t=1, number_of_steps_for_heat_equation - 1
+            !print*, t
+
+            call update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation)
+
+            call update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
+
+        end do
 
     end do
 
+    print*, "Final Total averaged dissipation:", Total_averaged_dissipation
+
     open(4, file = 'Q.dat')
         ! Write the time and displacement data to file
-        do i=100, number_of_time_steps-1
+        do i=100, number_of_time_steps_for_deformaion-1
             write(4,*) i*(delta_t)*angular_speed/(2.0*acos(-1.0d0)), Q_in_time(i)/1e9
         end do
     close(4)
+
+    open(5, file = 'dissipation.dat')
+        ! Write the time and displacement data to file
+        do j=0, jmax
+
+            do m=0,j
+
+                i=j*(j+1)/2+m+1
+
+                write(5,*) j, m, dissipation(25, i)
+
+            end do
+
+        end do
+    close(5)
 
 
 end program Europa_simulation
