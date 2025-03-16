@@ -4531,7 +4531,8 @@ subroutine update_log_temperature(number_of_layers, jmax, temperature, log_tempe
 
 end subroutine
 
-subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, temperature, folder_name)
+subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, &
+    temperature, folder_name, num_angles, angles)
     implicit none
 
     ! Inputs
@@ -4539,105 +4540,78 @@ subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_
     real*8, intent(in) :: heat_equation_delta_t, delta_r
     complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
     character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
+    integer, intent(in) :: num_angles  ! Number of predefined angles
+    integer, dimension(num_angles,2), intent(in) :: angles  ! Array of (latitude, longitude) pairs
 
     ! Local variables
     real*8, allocatable :: data(:,:)
-    integer :: l, m, i
-    character(len=100) :: file_path_1, file_path_2, file_path_3, file_path_4, file_path_5
-    character(len=100) :: file_path_6, file_path_7, file_path_8, file_path_9
+    integer :: i, layer_index, file_unit, l, m
+    character(len=100) :: file_path
 
     ! Allocate memory for data
     allocate(data(360, 180))
 
-    ! Generate file paths inside the folder
-    file_path_1 = trim(folder_name) // "/temperature1.txt"
-    file_path_2 = trim(folder_name) // "/temperature2.txt"
-    file_path_3 = trim(folder_name) // "/temperature3.txt"
+    ! ===== 1. Write temperature at layers (5, 10, ..., 45) =====
+    do i = 1, 9
+        layer_index = i * 5  ! 5, 10, 15, ..., 45
+        write(file_path, '(A,"/temperature",I1,".txt")') trim(folder_name), i
 
-    file_path_4 = trim(folder_name) // "/temperature_0_0.txt"
-    file_path_5 = trim(folder_name) // "/temperature_90_0.txt"
-    file_path_6 = trim(folder_name) // "/temperature_90_90.txt"
-    file_path_7 = trim(folder_name) // "/temperature_90_180.txt"
-    file_path_8 = trim(folder_name) // "/temperature_90_270.txt"
-    file_path_9 = trim(folder_name) // "/temperature_180_0.txt"
+        ! Process temperature data
+        call HARMSY(180, jmax, temperature(layer_index,:), data)
 
-    ! Process and write temperature1 data
-    call HARMSY(180, jmax, temperature(37,:), data)
-    open(unit=11, file=trim(file_path_1), status="old", action="write", position="append")
+        ! Assign a unique file unit (11-19)
+        file_unit = 10 + i  
 
-    write(11, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(11, *) 180-l + 0.5, m-1, data(m,l)
+        ! Open file in append mode
+        open(unit=file_unit, file=trim(file_path), status="old", action="write", position="append")
+
+        ! Write time information
+        write(file_unit, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+        ! Write spatial data
+        do l = 1, 180
+            do m = 1, 360
+                write(file_unit, *) 180-l + 0.5, m-1, data(m,l)
+            end do
         end do
+
+        ! Close file
+        close(file_unit)
     end do
-    close(11)
 
-    ! Process and write temperature2 data
-    call HARMSY(180, jmax, temperature(25,:), data)
-    open(unit=12, file=trim(file_path_2), status="old", action="write", position="append")
+        ! ===== 2. Write temperature at predefined angles =====
+    do i = 1, num_angles
+        ! Generate filename
+        write(file_path, '(A,"/temperature_",I3.3,"_",I3.3,".txt")') &
+        trim(folder_name), angles(i,1), angles(i,2)
 
-    write(12, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(12, *) 180-l + 0.5, m-1, data(m,l)
+        ! Assign a unique file unit (21-26, or more depending on num_angles)
+        file_unit = 20 + i  
+
+        ! Open file in append mode
+        open(unit=file_unit, file=trim(file_path), status="old", action="write", position="append")
+
+        ! Write time information
+        write(file_unit, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+        ! Loop over layers to write temperature at specific lat/lon
+        do layer_index = 1, number_of_layers
+            call HARMSY(180, jmax, temperature(layer_index,:), data)
+
+            ! Select temperature at the corresponding (lat, lon)
+            write(file_unit, *) (layer_index-1)*delta_r/(1000.0), &
+            data(angles(i,2)+1, 180-angles(i,1))
         end do
+
+        ! Close file
+        close(file_unit)
     end do
-    close(12)
-
-    ! Process and write temperature3 data
-    call HARMSY(180, jmax, temperature(12,:), data)
-    open(unit=13, file=trim(file_path_3), status="old", action="write", position="append")
-
-    write(13, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(13, *) 180-l + 0.5, m-1, data(m,l)
-        end do
-    end do
-    close(13)
-
-    open(unit=21, file=trim(file_path_4), status="old", action="write", position="append")
-    open(unit=22, file=trim(file_path_5), status="old", action="write", position="append")
-    open(unit=23, file=trim(file_path_6), status="old", action="write", position="append")
-    open(unit=24, file=trim(file_path_7), status="old", action="write", position="append")
-    open(unit=25, file=trim(file_path_8), status="old", action="write", position="append")
-    open(unit=26, file=trim(file_path_9), status="old", action="write", position="append")
-
-    write(21, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    write(22, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    write(23, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    write(24, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    write(25, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    write(26, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-
-
-
-    do i = 1, number_of_layers
-
-        call HARMSY(180, jmax, temperature(i,:), data)
-
-        write(21, *) (i-1)*delta_r/(1000.0), data(1,180)
-        write(22, *) (i-1)*delta_r/(1000.0), data(1,90)
-        write(23, *) (i-1)*delta_r/(1000.0), data(91,90)
-        write(24, *) (i-1)*delta_r/(1000.0), data(191,90)
-        write(25, *) (i-1)*delta_r/(1000.0), data(271,90)
-        write(26, *) (i-1)*delta_r/(1000.0), data(1,1)
-
-    end do
-
-
-    close(21)
-    close(22)
-    close(23)
-    close(24)
-    close(25)
-    close(26)
 
     ! Deallocate memory
     deallocate(data)
 
 end subroutine write_temperature_data
+
 
 subroutine write_dissipation(number_of_layers, jmax, k, number_of_steps_for_heat_equation, heat_equation_delta_t, dissipation, Total_averaged_dissipation, folder_name)
     implicit none
@@ -4651,69 +4625,64 @@ subroutine write_dissipation(number_of_layers, jmax, k, number_of_steps_for_heat
 
     ! Local variables
     real*8, allocatable :: data(:,:)
-    integer :: l, m
-    character(len=100) :: file_path_1, file_path_2, file_path_3, file_path_total
+    integer :: i, layer_index, file_unit, l, m
+    character(len=100) :: file_path
 
     ! Allocate memory for data
     allocate(data(360, 180))
 
-    ! Generate file paths inside the folder
-    file_path_1 = trim(folder_name) // "/dissipation1.txt"
-    file_path_2 = trim(folder_name) // "/dissipation2.txt"
-    file_path_3 = trim(folder_name) // "/dissipation3.txt"
-    file_path_total = trim(folder_name) // "/total_dissipation.txt"
+    ! ===== 1. Write dissipation at layers (5, 10, ..., 45) =====
+    do i = 1, 9
+        layer_index = i * 5  ! 5, 10, 15, ..., 45
+        write(file_path, '(A,"/dissipation",I1,".txt")') trim(folder_name), i
 
-    ! Process and write dissipation1 data
-    call HARMSY(180, jmax, dissipation(37,:), data)
-    open(unit=14, file=trim(file_path_1), status="old", action="write", position="append")
+        ! Process dissipation data
+        call HARMSY(180, jmax, dissipation(layer_index,:), data)
 
-    write(14, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(14, *) 180-l + 0.5, m-1, data(m,l)
+        ! Assign a unique file unit (14-22)
+        file_unit = 13 + i  
+
+        ! Open file in append mode
+        open(unit=file_unit, file=trim(file_path), status="old", action="write", position="append")
+
+        ! Write time information
+        write(file_unit, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+        ! Write spatial data
+        do l = 1, 180
+            do m = 1, 360
+                write(file_unit, *) 180-l + 0.5, m-1, data(m,l)
+            end do
         end do
+
+        ! Close file
+        close(file_unit)
     end do
-    close(14)
 
-    ! Process and write dissipation2 data
-    call HARMSY(180, jmax, dissipation(25,:), data)
-    open(unit=15, file=trim(file_path_2), status="old", action="write", position="append")
+    ! ===== 2. Write total dissipation value =====
+    write(file_path, '(A,"/total_dissipation.txt")') trim(folder_name)
 
-    write(15, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(15, *) 180-l + 0.5, m-1, data(m,l)
-        end do
-    end do
-    close(15)
-
-    ! Process and write dissipation3 data
-    call HARMSY(180, jmax, dissipation(16,:), data)
-    open(unit=16, file=trim(file_path_3), status="old", action="write", position="append")
-
-    write(16, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(16, *) 180-l + 0.5, m-1, data(m,l)
-        end do
-    end do
-    close(16)
+    ! Open total dissipation file in append mode
+    open(unit=23, file=trim(file_path), status="old", action="write", position="append")
 
     ! Write total dissipation value
-    open(unit=17, file=trim(file_path_total), status="old", action="write", position="append")
-    write(17, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9), Total_averaged_dissipation/(1.0E9)
-    close(17)
+    write(23, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9), &
+                 Total_averaged_dissipation / (1.0E9)
+
+    ! Close total dissipation file
+    close(23)
 
     ! Deallocate memory
     deallocate(data)
 
 end subroutine write_dissipation
 
-subroutine calculate_fluidity_2(number_of_layers, jmax, A, B, temperature, fluidity_2)
+
+subroutine calculate_fluidity_2(number_of_layers, jmax, eta_0, temperature, fluidity_2)
     implicit none
 
     integer, intent(in) :: number_of_layers, jmax
-    real*8, intent(in) :: A, B
+    real*8, intent(in) :: eta_0
     complex*16, intent(in) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
     complex*16, intent(inout) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
 
@@ -4734,7 +4703,7 @@ subroutine calculate_fluidity_2(number_of_layers, jmax, A, B, temperature, fluid
 
             do m=1, 360
     
-                fluidity_2_data(m,l) = 1.0/(2.0*A*dexp(-B*temperature_data(m,l)))
+                fluidity_2_data(m,l) = 1.0/(2.0*eta_0*dexp(((59000.0)/(8.314*273.0))*(((273.0)/(temperature_data(m,l)))-1.0)))
     
             end do
     
@@ -4765,57 +4734,46 @@ subroutine write_fluidity_2_data(number_of_layers, jmax, t, k, number_of_steps_f
 
     ! Local variables
     real*8, allocatable :: data(:,:)
-    integer :: l, m
-    character(len=100) :: file_path_1, file_path_2, file_path_3
+    integer :: i, layer_index, file_unit, l, m
+    character(len=100) :: file_path
 
     ! Allocate memory for data
     allocate(data(360, 180))
 
-    ! Generate file paths inside the folder
-    file_path_1 = trim(folder_name) // "/fluidity_21.txt"
-    file_path_2 = trim(folder_name) // "/fluidity_22.txt"
-    file_path_3 = trim(folder_name) // "/fluidity_23.txt"
+    ! Loop over indices (5, 10, 15, ..., 45) and write corresponding files
+    do i = 1, 9
+        layer_index = i * 5  ! 5, 10, 15, ..., 45
+        write(file_path, '(A,I1,A)') trim(folder_name)//"/fluidity_2", i, ".txt"
 
-    ! Process and write fluidity_21 data
-    call HARMSY(180, jmax, fluidity_2(37,:), data)
-    open(unit=18, file=trim(file_path_1), status="old", action="write", position="append")
+        ! Process the data for the given layer index
+        call HARMSY(180, jmax, fluidity_2(layer_index,:), data)
 
-    write(18, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(18, *) 180-l + 0.5, m-1, data(m,l)
+        ! Assign a unique unit number for each file
+        file_unit = 30 + i  ! Ensures units 31-39 for fluidity files
+
+        ! Open the file in append mode and write data
+        open(unit=file_unit, file=trim(file_path), status="old", action="write", position="append")
+        
+        ! Write time information
+        write(file_unit, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+        ! Write spatial data
+        do l = 1, 180
+            do m = 1, 360
+                write(file_unit, *) 180-l + 0.5, m-1, data(m,l)
+            end do
         end do
+
+        ! Close file
+        close(file_unit)
     end do
-    close(18)
 
-    ! Process and write fluidity_22 data
-    call HARMSY(180, jmax, fluidity_2(25,:), data)
-    open(unit=19, file=trim(file_path_2), status="old", action="write", position="append")
-
-    write(19, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(19, *) 180-l + 0.5, m-1, data(m,l)
-        end do
-    end do
-    close(19)
-
-    ! Process and write fluidity_23 data
-    call HARMSY(180, jmax, fluidity_2(12,:), data)
-    open(unit=20, file=trim(file_path_3), status="old", action="write", position="append")
-
-    write(20, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
-    do l = 1, 180
-        do m = 1, 360
-            write(20, *) 180-l + 0.5, m-1, data(m,l)
-        end do
-    end do
-    close(20)
 
     ! Deallocate memory
     deallocate(data)
 
 end subroutine write_fluidity_2_data
+
 
 subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
     implicit none
@@ -4840,9 +4798,9 @@ subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_l
     ! Allocate memory for data
     allocate(temperature_data(360, 180), log_temperature_data(360, 180))
 
-    open(1,file='coefin.dat') ! cteni SH koeficientu ze souboru
+    open(1,file='outer_dirichlet.dat') ! cteni SH koeficientu ze souboru
 
-    do j=0,8 ! cyklus pres stupen
+    do j=0,30 ! cyklus pres stupen
           do m=0,j    ! cyklus pres rad
               read(1,*) q, w, coef_
               i=j*(j+1)/2+m+1
@@ -4852,7 +4810,7 @@ subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_l
 
     close(1)
 
-    temperature(1,1) = 957.1251
+    temperature(1,1) = 967.7
 
     do i=2, number_of_layers - 1
 
@@ -4892,119 +4850,6 @@ subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_l
     end do
 
 end subroutine set_up_initial_values_for_temperature_and_log_temperature
-
-subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
-    implicit none
-
-    integer, intent(in) :: number_of_layers, jmax
-    real*8 :: radius, delta_r
-    real*8 averaged_dissipation_on_grid(number_of_layers,360, 180)
-    complex*16 :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-
-    complex*16 :: sqrt_dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    real*8 :: sqrt_on_grid(360, 180), data1(360,180)
-
-    complex*16 coef(12000),crhs(12000),coef1(12000)
-
-    integer :: i, j, m, k, o, l
-    real*8 :: Qcum, fac
-    real*8 :: Q(number_of_layers)
-    real*8 :: Q_total
-    real*8 :: theta, weight, pi
-
-    Q_total=0
-    sqrt_dissipation=0
-
-    do i=1, number_of_layers
-
-        sqrt_on_grid = 0
-
-        do j=1, 180
-
-            do k=1, 360
-
-                sqrt_on_grid(k, j) = dsqrt(averaged_dissipation_on_grid(i,k,j))
-
-            end do
-
-        end do
-
-        call HARMAN(180,jmax,sqrt_on_grid,crhs)
-        call HARMLS(180,jmax,crhs,coef)
-
-        do j=0,jmax
-            do m=0,j
-            o=j*(j+1)/2+m+1
-            sqrt_dissipation(i,o) = coef(o)
-            enddo
-        enddo
-
-    end do
-
-    do i = 1, number_of_layers
-        Qcum = 0d0            
-    
-        do j = 0, jmax
-            do m = 0, j
-                o=j*(j+1)/2+m+1
-                fac = 2d0
-                if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
-
-                Qcum = Qcum + fac*(dreal(sqrt_dissipation(i,o))**2 + aimag(sqrt_dissipation(i,o))**2)
-                
-            end do
-        end do
-    
-        Q(i) = Qcum
-    end do
-    
-    ! Apply the trapezoidal rule to approximate the integral
-    do m = 1, number_of_layers - 1
-        Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
-    end do
-    
-    ! Output the result
-    print*, 'The total dissipation from grid synthesiz', Q_total
-
-    ! Q_total=0
-
-    ! pi = 4.0d0 * datan(1.0d0)
-
-    ! ! Loop over radial layers
-    ! do i = 1, number_of_layers
-    !     Qcum = 0.0d0
-
-    !     call HARMSY(180, jmax, dissipation(i,:), data1)
-    !     ! do k=1, (jmax + 1) * (jmax + 2) / 2
-    !     !     print*, i, k, dissipation(i,k)
-    !     ! end do
-
-
-    !     ! Loop over latitude and longitude
-    !     do k = 1, 180
-    !         theta = (k - 0.5) * (pi / 180.0)  ! Midpoint latitude in radians
-    !         weight = dsin(theta)  ! Proper weight factor for latitude integration
-
-    !         do l = 1, 360
-    !             Qcum = Qcum + data1(l, k) * &
-    !                 (pi / 180.0) * (2.0d0 * pi / 360.0) * weight
-    !         end do
-    !     end do
-
-    !     Q(i) = Qcum
-    ! end do
-    
-    ! ! Apply the trapezoidal rule to approximate the integral
-    ! do m = 1, number_of_layers - 1
-    !     Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
-    ! end do
-
-
-    
-    ! ! Output the result
-    ! print*, 'The total dissipation from integral of averaged dissipation', Q_total
-
-end subroutine
 
 subroutine update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
     implicit none
@@ -5066,6 +4911,282 @@ subroutine update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, 
 
 end subroutine
 
+subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+    implicit none
+
+    integer, intent(in) :: number_of_layers, jmax
+    real*8 :: radius, delta_r
+    real*8 averaged_dissipation_on_grid(number_of_layers,360, 180)
+    complex*16 :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+
+    complex*16 :: sqrt_dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    real*8 :: sqrt_on_grid(360, 180), data1(360,180)
+
+    complex*16 coef(12000),crhs(12000),coef1(12000)
+
+    integer :: i, j, m, k, o, l
+    real*8 :: Qcum, fac
+    real*8 :: Q(number_of_layers)
+    real*8 :: Q_total
+    real*8 :: theta, weight, pi
+
+    ! Q_total=0
+    ! sqrt_dissipation=0
+
+    ! do i=1, number_of_layers
+
+    !     sqrt_on_grid = 0
+
+    !     do j=1, 180
+
+    !         do k=1, 360
+
+    !             sqrt_on_grid(k, j) = dsqrt(averaged_dissipation_on_grid(i,k,j))
+
+    !         end do
+
+    !     end do
+
+    !     call HARMAN(180,jmax,sqrt_on_grid,crhs)
+    !     call HARMLS(180,jmax,crhs,coef)
+
+    !     do j=0,jmax
+    !         do m=0,j
+    !         o=j*(j+1)/2+m+1
+    !         sqrt_dissipation(i,o) = coef(o)
+    !         enddo
+    !     enddo
+
+    ! end do
+
+    ! do i = 1, number_of_layers
+    !     Qcum = 0d0            
+    
+    !     do j = 0, jmax
+    !         do m = 0, j
+    !             o=j*(j+1)/2+m+1
+    !             fac = 2d0
+    !             if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
+
+    !             Qcum = Qcum + fac*(dreal(sqrt_dissipation(i,o))**2 + aimag(sqrt_dissipation(i,o))**2)
+                
+    !         end do
+    !     end do
+    
+    !     Q(i) = Qcum
+    ! end do
+    
+    ! ! Apply the trapezoidal rule to approximate the integral
+    ! do m = 1, number_of_layers - 1
+    !     Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
+    ! end do
+    
+    ! ! Output the result
+    ! print*, 'The total dissipation from grid synthesiz', Q_total
+
+    Q_total=0
+
+    pi = 4.0d0 * datan(1.0d0)
+
+    ! Loop over radial layers
+    do i = 1, number_of_layers
+        Qcum = 0.0d0
+
+        call HARMSY(180, jmax, dissipation(i,:), data1)
+        ! do k=1, (jmax + 1) * (jmax + 2) / 2
+        !     print*, i, k, dissipation(i,k)
+        ! end do
+
+
+        ! Loop over latitude and longitude
+        do k = 1, 180
+            theta = (k - 0.5) * (pi / 180.0)  ! Midpoint latitude in radians
+            weight = dsin(theta)  ! Proper weight factor for latitude integration
+
+            do l = 1, 360
+                Qcum = Qcum + averaged_dissipation_on_grid(i, l, k) * &
+                    (pi / 180.0) * (2.0d0 * pi / 360.0) * weight
+            end do
+        end do
+
+        Q(i) = Qcum
+    end do
+
+    ! Apply the trapezoidal rule to approximate the integral
+    do m = 1, number_of_layers - 1
+        Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
+    end do
+
+
+
+    ! Output the result
+    print*, 'The total dissipation from integral of averaged dissipation', Q_total
+
+end subroutine
+
+subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_steps_for_heat_equation, heat_equation_delta_t, radius, delta_r, thickness, k_0, temperature,  folder_name)
+    implicit none
+
+    ! Inputs
+    integer, intent(in) :: jmax, number_of_layers, k, number_of_steps_for_heat_equation
+    real*8, intent(in) :: heat_equation_delta_t,radius, delta_r, thickness, k_0
+    complex*16, intent(in) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
+
+    complex*16 :: lower_temperature_gradient(3 * (jmax * (jmax + 1) / 2 + jmax) + 1), upper_temperature_gradient(3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
+    complex*16 :: lower_radial_gradiant((jmax + 1) * (jmax + 2) / 2), upper_radial_gradiant((jmax + 1) * (jmax + 2) / 2)
+    integer :: vector_index, scalar_index, j, m, l
+    real*8 :: j1
+    real*8, allocatable :: temperature_data(:,:), readial_gradient_data(:,:)
+    real*8 :: Qcum, pi, weight, theta
+
+    pi = 4.0d0 * datan(1.0d0)
+
+    allocate(temperature_data(360, 180), readial_gradient_data(360, 180))
+
+    lower_temperature_gradient=0D0
+    upper_temperature_gradient=0D0
+
+    do j=0,jmax
+
+        j1 = real(j)
+
+        do m=0, j
+
+            scalar_index = j * (j + 1) / 2 + m + 1
+            vector_index = 3 * (j * (j + 1) / 2 + m)
+
+            if (j==0) then
+
+                lower_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)-(j1)/(radius+(1.0)/(2.0)*delta_r)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
+
+                upper_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers,scalar_index)-Temperature(number_of_layers-1,scalar_index))/(delta_r)-(j1)/(radius+thickness-(1.0)/(2.0)*delta_r)*(Temperature(number_of_layers,scalar_index)+Temperature(number_of_layers-1,scalar_index))/(2.0))
+
+            else
+
+                lower_temperature_gradient(vector_index-1)= (dsqrt(j1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)+(j1+1)/(radius+(1.0)/(2.0)*delta_r)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
+
+                lower_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)-(j1)/(radius+(1.0)/(2.0)*delta_r)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
+
+                upper_temperature_gradient(vector_index-1)= (dsqrt(j1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers,scalar_index)-Temperature(number_of_layers-1,scalar_index))/(delta_r)+(j1+1)/(radius+thickness-(1.0)/(2.0)*delta_r)*(Temperature(number_of_layers,scalar_index)+Temperature(number_of_layers-1,scalar_index))/(2.0))
+
+                upper_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers,scalar_index)-Temperature(number_of_layers-1,scalar_index))/(delta_r)-(j1)/(radius+thickness-(1.0)/(2.0)*delta_r)*(Temperature(number_of_layers,scalar_index)+Temperature(number_of_layers-1,scalar_index))/(2.0))
+
+            end if
+
+        end do
+
+    end do
+
+    do j=0,jmax
+
+        j1 = real(j)
+
+        do m=0, j
+
+            scalar_index = j * (j + 1) / 2 + m + 1
+            vector_index = 3 * (j * (j + 1) / 2 + m)
+
+            if (j==0) then
+
+                upper_radial_gradiant(scalar_index) = -dsqrt((j1+1)/(2*j1+1))*upper_temperature_gradient(vector_index+1)
+                lower_radial_gradiant(scalar_index) = -dsqrt((j1+1)/(2*j1+1))*lower_temperature_gradient(vector_index+1)
+
+            else
+
+                upper_radial_gradiant(scalar_index) = dsqrt((j1)/(2*j1+1))*upper_temperature_gradient(vector_index-1)-dsqrt((j1+1)/(2*j1+1))*upper_temperature_gradient(vector_index+1)
+                lower_radial_gradiant(scalar_index) = dsqrt((j1)/(2*j1+1))*lower_temperature_gradient(vector_index-1)-dsqrt((j1+1)/(2*j1+1))*lower_temperature_gradient(vector_index+1)
+
+            end if
+
+        end do
+
+    end do
+
+    open(unit=60, file=trim(trim(folder_name) // "/lower_heat_flux.txt"), status="old", action="write", position="append")
+        
+    ! Write time information
+    write(60, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+    call HARMSY(180, jmax, lower_radial_gradiant(:), readial_gradient_data)
+    call HARMSY(180, jmax, (temperature(1,:)+temperature(2,:))/2.0, temperature_data)
+
+
+    ! Write spatial data
+    do l = 1, 180
+        do m = 1, 360
+            write(60, *) 180-l + 0.5, m-1, -(k_0*readial_gradient_data(m,l))/(temperature_data(m,l))
+        end do
+    end do
+
+        ! Close file
+    close(60)
+
+    Qcum = 0.0d0
+    ! Loop over latitude and longitude
+    do l = 1, 180
+        theta = (l - 0.5) * (pi / 180.0)  ! Midpoint latitude in radians
+        weight = dsin(theta)  ! Proper weight factor for latitude integration
+
+        do m = 1, 360
+            Qcum = Qcum + -(k_0*readial_gradient_data(m,l))/(temperature_data(m,l)) * &
+                (pi / 180.0) * (2.0d0 * pi / 360.0) * weight
+        end do
+    end do
+
+    Qcum = Qcum*(radius+(1.0)/(2.0)*delta_r)*(radius+(1.0)/(2.0)*delta_r)
+
+    open(unit=62, file=trim(trim(folder_name) // "/total_lower_heat_flux.txt"), status="old", action="write", position="append")
+
+    ! Write total dissipation value
+    write(62, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9), &
+    Qcum / (1.0E9)
+    close(62)
+
+
+
+    open(unit=61, file=trim(trim(folder_name) // "/upper_heat_flux.txt"), status="old", action="write", position="append")
+        
+    ! Write time information
+    write(61, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
+
+    call HARMSY(180, jmax, upper_radial_gradiant(:), readial_gradient_data)
+    call HARMSY(180, jmax, (temperature(number_of_layers,:)+temperature(number_of_layers-1,:))/2.0, temperature_data)
+
+
+    ! Write spatial data
+    do l = 1, 180
+        do m = 1, 360
+            write(61, *) 180-l + 0.5, m-1, -(k_0*readial_gradient_data(m,l))/(temperature_data(m,l))
+        end do
+    end do
+
+    ! Close file
+    close(61)
+
+
+    Qcum = 0.0d0
+    ! Loop over latitude and longitude
+    do l = 1, 180
+        theta = (l - 0.5) * (pi / 180.0)  ! Midpoint latitude in radians
+        weight = dsin(theta)  ! Proper weight factor for latitude integration
+
+        do m = 1, 360
+            Qcum = Qcum + -(k_0*readial_gradient_data(m,l))/(temperature_data(m,l)) * &
+                (pi / 180.0) * (2.0d0 * pi / 360.0) * weight
+        end do
+    end do
+
+    Qcum = Qcum*(radius+thickness-(1.0)/(2.0)*delta_r)*(radius+thickness-(1.0)/(2.0)*delta_r)
+
+    open(unit=63, file=trim(trim(folder_name) // "/total_upper_heat_flux.txt"), status="old", action="write", position="append")
+
+    ! Write total dissipation value
+    write(63, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9), &
+    Qcum / (1.0E9)
+    close(63)
+
+end subroutine calculate_and_write_heat_flux
 
 ! This program simulates the deformation of Jupiter's moon Europa
 program Europa_simulation
@@ -5079,10 +5200,10 @@ program Europa_simulation
     real*8, parameter :: delta_t=3.551181*24*36                         ! This is 0.01 of the period of the Europa's revolution around Jupiter, the period is 3.551181 days
     real*8, parameter :: heat_equation_delta_t=2E10
 
-    integer, parameter :: number_or_total_rounds=100
+    integer, parameter :: number_or_total_rounds=200
     ! Number of time steps, determines the length of the simulation
     integer, parameter :: number_of_time_steps_for_deformaion=200
-    integer, parameter :: number_of_steps_for_heat_equation=200
+    integer, parameter :: number_of_steps_for_heat_equation=100
     
     ! These are the physical paramteres for Europa's icy layer, the main parameters of the simulation
     real*8, parameter :: radius = 1531000.0d0                           ! The inner radius of Europa in meters
@@ -5097,9 +5218,7 @@ program Europa_simulation
     real*8, parameter :: excentricity = 0.009                           ! Eccentricity of Europa's orbit
     real*8, parameter :: k_0 = 651
     real*8, parameter :: c_p = 2108
-    real*8, parameter :: A = 9.273E19
-    real*8, parameter :: B = 5.033E-2
-
+    real*8, parameter :: eta_0 = 1E15
 
     real*8, parameter :: delta_r = thickness / (number_of_layers - 1)   ! Radial distance between layers
 
@@ -5129,6 +5248,9 @@ program Europa_simulation
     complex*16, allocatable :: log_temperature(:,:)
     complex*16, allocatable :: log_temperature_previous(:,:)
 
+    complex*16, allocatable :: lower_temperature_gradient(:)
+    complex*16, allocatable :: upper_temperature_gradient(:)
+
     real*8, allocatable :: averaged_dissipation_on_grid(:,:,:)
 
     ! Loop variables and other results
@@ -5146,7 +5268,9 @@ program Europa_simulation
     logical :: write_simulation_data
 
     ! This variables are for writing of data to a file
-    character(len=50) :: folder_name
+    integer, parameter :: num_angles = 7
+    integer, dimension(num_angles, 2) :: angles
+    character(len=80) :: folder_name, file_name
     character(len=8)  :: date
     character(len=10) :: time
     integer, dimension(8) :: values
@@ -5154,6 +5278,14 @@ program Europa_simulation
     complex*16 coef(12000),crhs(12000),coef1(12000)
 
     real :: start_time, end_time, elapsed_time
+
+    angles(1,1) = 0   ; angles(1,2) = 0
+    angles(2,1) = 90  ; angles(2,2) = 0
+    angles(3,1) = 90  ; angles(3,2) = 90
+    angles(4,1) = 90  ; angles(4,2) = 180
+    angles(5,1) = 90  ; angles(5,2) = 270
+    angles(6,1) = 179 ; angles(6,2) = 0
+    angles(7,1) = 30   ; angles(7,2) = 90
 
     max_scalar_index = (jmax + 1) * (jmax + 2) / 2
     max_vector_index = 3 * (jmax * (jmax + 1) / 2 + jmax) + 1
@@ -5183,93 +5315,89 @@ program Europa_simulation
     allocate(log_temperature(number_of_layers, max_scalar_index))
     allocate(log_temperature_previous(number_of_layers, max_scalar_index))
 
+    allocate(lower_temperature_gradient(max_vector_index))
+    allocate(upper_temperature_gradient(max_vector_index))
+
     allocate(averaged_dissipation_on_grid(number_of_layers, 360, 180))
 
 
     test = .FALSE.
-    write_deformation_data = .FALSE.
-    write_simulation_data = .TRUE.
-
-    if (write_deformation_data) then
-
-        ! Get the current date and time
-        call date_and_time(date, time, values=values)
-
-        ! Create timestamp in the format YYYYMMDD_HHMMSS
-        write(folder_name, '(I4.4,I2.2,I2.2,"_",I2.2,I2.2,I2.2)') &
-            values(1), values(2), values(3), values(5), values(6), values(7)
-
-        ! Append folder description
-        folder_name = trim(folder_name) // "_simulation_data"
-
-        ! Create the directory
-        call system("mkdir -p " // trim(folder_name))
-
-        print *, "Folder created: ", trim(folder_name)
-
-        open(unit=10, file=trim(folder_name)//"/displacement101.txt",status="replace", action="write")
-        close(10)
-
-    end if
+    write_simulation_data = .FALSE.
 
     if (write_simulation_data) then
         ! Get the current date and time
         call date_and_time(date, time, values=values)
-
+    
         ! Create timestamp in the format YYYYMMDD_HHMMSS
         write(folder_name, '(I4.4,I2.2,I2.2,"_",I2.2,I2.2,I2.2)') &
             values(1), values(2), values(3), values(5), values(6), values(7)
-
+    
         ! Append folder description
         folder_name = trim(folder_name) // "_simulation_data"
-
+    
         ! Create the directory
         call system("mkdir -p " // trim(folder_name))
-
+    
         print *, "Folder created: ", trim(folder_name)
+    
+        ! Open and close required files using loops
+    
+        ! Temperature files
+        do i = 1, 9
+            write(file_name, '(A,I1,A)') trim(folder_name)//"/temperature", i, ".txt"
+            open(unit=10+i, file=trim(file_name), status="replace", action="write")
+            close(10+i)
+        end do
+    
+        ! Dissipation files
+        do i = 1, 9
+            write(file_name, '(A,I1,A)') trim(folder_name)//"/dissipation", i, ".txt"
+            open(unit=20+i, file=trim(file_name), status="replace", action="write")
+            close(20+i)
+        end do
+    
+        ! Fluidity files
+        do i = 21, 29  ! Keeping the numbering consistent with the previous convention
+            write(file_name, '(A,I2,A)') trim(folder_name)//"/fluidity_", i, ".txt"
+            open(unit=30+i-21, file=trim(file_name), status="replace", action="write")
+            close(30+i-21)
+        end do
 
-        ! Open and close the required files inside the created folder
-        open(unit=11, file=trim(folder_name)//"/temperature1.txt", status="replace", action="write")
-        close(11)
-        open(unit=12, file=trim(folder_name)//"/temperature2.txt", status="replace", action="write")
-        close(12)
-        open(unit=13, file=trim(folder_name)//"/temperature3.txt", status="replace", action="write")
-        close(13)
+        ! Special file: total_dissipation.txt
+        file_name = trim(folder_name) // "/total_dissipation.txt"
+        open(unit=50, file=file_name, status="replace", action="write")
+        close(50)
+    
+        do i = 1, num_angles
+            write(file_name, '(A,"/temperature_",I3.3,"_",I3.3,".txt")') &
+                trim(folder_name), angles(i,1), angles(i,2)
+            open(unit=40+i, file=trim(file_name), status="replace", action="write")
+            close(40+i)
+        end do
 
-        open(unit=14, file=trim(folder_name)//"/dissipation1.txt", status="replace", action="write")
-        close(14)
-        open(unit=15, file=trim(folder_name)//"/dissipation2.txt", status="replace", action="write")
-        close(15)
-        open(unit=16, file=trim(folder_name)//"/dissipation3.txt", status="replace", action="write")
-        close(16)
+        !heat_flux_at_the_bottom
+        file_name = trim(folder_name) // "/lower_heat_flux.txt"
+        open(unit=60, file=file_name, status="replace", action="write")
+        close(60)
 
-        open(unit=17, file=trim(folder_name)//"/total_dissipation.txt", status="replace", action="write")
-        close(17)
+        file_name = trim(folder_name) // "/upper_heat_flux.txt"
+        open(unit=61, file=file_name, status="replace", action="write")
+        close(61)
 
-        open(unit=18, file=trim(folder_name)//"/fluidity_21.txt", status="replace", action="write")
-        close(18)
-        open(unit=19, file=trim(folder_name)//"/fluidity_22.txt", status="replace", action="write")
-        close(19)
-        open(unit=20, file=trim(folder_name)//"/fluidity_23.txt", status="replace", action="write")
-        close(20)
+        !heat_flux_at_the_bottom
+        file_name = trim(folder_name) // "/total_lower_heat_flux.txt"
+        open(unit=62, file=file_name, status="replace", action="write")
+        close(62)
 
-        open(unit=21, file=trim(folder_name)//"/temperature_0_0.txt", status="replace", action="write")
-        close(21)
-        open(unit=22, file=trim(folder_name)//"/temperature_90_0.txt", status="replace", action="write")
-        close(22)
-        open(unit=22, file=trim(folder_name)//"/temperature_90_90.txt", status="replace", action="write")
-        close(23)
-        open(unit=24, file=trim(folder_name)//"/temperature_90_180.txt", status="replace", action="write")
-        close(24)
-        open(unit=25, file=trim(folder_name)//"/temperature_90_270.txt", status="replace", action="write")
-        close(25)
-        open(unit=26, file=trim(folder_name)//"/temperature_180_0.txt", status="replace", action="write")
-        close(26)
-
+        file_name = trim(folder_name) // "/total_upper_heat_flux.txt"
+        open(unit=63, file=file_name, status="replace", action="write")
+        close(63)
+    
         print *, "Files successfully created in folder: ", trim(folder_name)
     else
         print *, "File writing is disabled."
     end if
+    
 
     ! Initialize arrays with zero values
     displacement = 0.0d0
@@ -5293,35 +5421,6 @@ program Europa_simulation
     log_temperature = 0.D0
     log_temperature_previous = 0.D0
 
-    !!!!!! load prepared fluidity from a file
-    !!!!!! This will be most likely changed in the future as we want to calculate the fluidity from the temperature, this is an example
-    open(unit=10, file='visc', status='old')
-
-
-
-    ! do j=0, 16
-
-    !     do m=0, j
-
-    !         base_idx = j*(j+1)/2+m+1
-
-    !         read(10, *) q_, w_, coef_
-
-    !         do i=1, number_of_layers
-    !             fluidity_2(number_of_layers - i + 1, base_idx) = coef_/2.0
-    !         end do
-
-    !     end do
-
-    ! end do
-
-    ! close(10)
-
-    ! do i=1, number_of_layers
-
-    !     fluidity_2(i,1) = 2*dsqrt(4.D0*datan(1.D0))*1/(2.0*eta)
-
-    ! end do
 
     call set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
 
@@ -5337,10 +5436,14 @@ program Europa_simulation
         averaged_dissipation_on_grid = 0
 
         if (write_simulation_data) then
-            call write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, temperature, folder_name)
+            call calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_steps_for_heat_equation, heat_equation_delta_t, radius, delta_r, thickness, k_0, temperature,  folder_name)
         end if
 
-        call calculate_fluidity_2(number_of_layers, jmax, A, B, temperature, fluidity_2)
+        if (write_simulation_data) then
+            call write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, temperature, folder_name, num_angles, angles)
+        end if
+
+        call calculate_fluidity_2(number_of_layers, jmax, eta_0, temperature, fluidity_2)
 
         if (write_simulation_data) then
             call write_fluidity_2_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, fluidity_2, folder_name)
@@ -5400,28 +5503,7 @@ program Europa_simulation
 
             end if
 
-            if (write_deformation_data) then
-
-                call calculate_radial_displacement_at_layer(number_of_layers, jmax, number_of_layers, displacement, radial_displacement)
-
-                open(unit=10, file=trim(folder_name)//"/displacement101.txt", status="old", action="write", position="append")
-                ! Write time step
-                write(10, *) t * delta_t
-                ! Write harmonic coefficients (radial displacement)
-                do j = 0, jmax
-                    do m = 0, j
-                        write(10,*) j, m, real(radial_displacement(j+1, m+1)), aimag(radial_displacement(j+1, m+1))
-                    end do
-                end do
-                close(10)
-            
-                print *, "Radial displacement data written to: ", trim(folder_name)//"/displacement101.txt"
-            
-                
-            end if
-
-            !call update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
-
+            call update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
 
             if (t>0) then
 
@@ -5443,31 +5525,30 @@ program Europa_simulation
 
                 call update_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid, dissipation)
 
-                !!!!!!
-                !call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
-                !!!!!!
+                call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+
             end if
 
         end do
 
         do i=1, number_of_layers
 
+            call HARMAN(180,jmax,averaged_dissipation_on_grid(i,:,:),crhs)
+            call HARMLS(180,jmax,crhs,coef)
 
-        call HARMAN(180,jmax,averaged_dissipation_on_grid(i,:,:),crhs)
-        call HARMLS(180,jmax,crhs,coef)
-
-        do j=0,jmax
-            do m=0,j
-            o=j*(j+1)/2+m+1
-            dissipation(i,o) = coef(o)
+            do j=0,jmax
+                do m=0,j
+                o=j*(j+1)/2+m+1
+                dissipation(i,o) = coef(o)
+                enddo
             enddo
-        enddo
 
         end do
 
-!!!!!!!
-        !call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid)
-!!!!!!!
+        call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+
+        !!!!!!
+        !dissipation = 0
 
         if (write_simulation_data) then
             call write_dissipation(number_of_layers, jmax, k, number_of_steps_for_heat_equation, heat_equation_delta_t, dissipation, Total_averaged_dissipation, folder_name)
@@ -5478,7 +5559,7 @@ program Europa_simulation
         call update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
 
         do t=1, number_of_steps_for_heat_equation - 1
-            !print*, t
+            print*, 'Heat equation step:', t
 
             call update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation)
 
