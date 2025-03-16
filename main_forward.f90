@@ -3775,7 +3775,7 @@ subroutine update_cauchy_integral(jmax, number_of_layers, delta_t, eta, mu, cauc
 
     elapsed_time = end_time - start_time
 
-    print*, "Elapsed time inside the funcion :", elapsed_time, "seconds"
+    !print*, "Elapsed time inside the funcion :", elapsed_time, "seconds"
 
     deallocate(cajm, ctjml, cjml)
 
@@ -4145,15 +4145,13 @@ subroutine calculate_global_dissipation(number_of_layers, jmax, number_of_time_s
 
 end subroutine
 
-subroutine update_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid, dissipation)
+subroutine update_grid_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid)
     implicit none
 
     integer, intent(in) :: number_of_layers, jmax, number_of_time_steps_for_deformaion
     complex*16, intent(in) :: cauchy(number_of_layers, 5*(jmax*(jmax+1)/2+jmax)-3)
     complex*16, intent(in) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
     real*8, intent(inout) :: averaged_dissipation_on_grid(number_of_layers, 360, 180)
-    complex*16, intent(inout) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-
 
     integer :: max_scalar_index_2, max_scalar_index, jmax12, jmax3     ! The maximal indexes for harmonic series of a scalar, vector and a deviatoric tensor 
     integer :: i, k, j, m, base_idx, INDT, jm
@@ -4201,12 +4199,6 @@ subroutine update_dissipation(number_of_layers, jmax, number_of_time_steps_for_d
 
         j=1
 
-        ! cauchy_auxiliary(INDT(2,0,0,2))=cauchy(i,8)
-        ! cauchy_auxiliary(INDT(2,0,2,2))=cauchy(i,10)
-        ! cauchy_auxiliary(INDT(2,0,4,2))=cauchy(i,12)
-        ! cauchy_auxiliary(INDT(2,2,0,2))=cauchy(i,18)
-        ! cauchy_auxiliary(INDT(2,2,2,2))=cauchy(i,20)
-        ! cauchy_auxiliary(INDT(2,2,4,2))=cauchy(i,22)
         do m=0, j
 
             if (m==0) then
@@ -4262,49 +4254,6 @@ subroutine update_dissipation(number_of_layers, jmax, number_of_time_steps_for_d
             end do
 
         end do
-
-        ! call VCSUM(jmax12,xx,xx,jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     cummulated_series(k) = cummulated_series(k) + sh3(k)
-        ! end do
-
-        ! call VCSUM(jmax12,yy,yy,jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     cummulated_series(k) = cummulated_series(k) + sh3(k)
-        ! end do
-
-        ! call VCSUM(jmax12,zz,zz,jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     cummulated_series(k) = cummulated_series(k) + sh3(k)
-        ! end do
-
-        ! call VCSUM(jmax12,xy,xy,jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     cummulated_series(k) = cummulated_series(k) + 2*sh3(k)
-        ! end do
-
-        ! call VCSUM(jmax12,xz,xz,jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     cummulated_series(k) = cummulated_series(k) + 2*sh3(k)
-        ! end do
-
-        ! call VCSUM(jmax12,yz,yz,jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     cummulated_series(k) = cummulated_series(k) + 2*sh3(k)
-        ! end do
-
-        ! call VCSUM(jmax12,cummulated_series,fluidity_2(i,:),jmax3,sh3)
-
-        ! do k=1, max_scalar_index
-        !     dissipation(i,k) = dissipation(i,k) + sh3(k)*(1.0/(number_of_time_steps_for_deformaion-100))
-        ! end do
-
 
         call HARMSY(180, jmax, xx, data1)
 
@@ -4385,15 +4334,11 @@ subroutine update_dissipation(number_of_layers, jmax, number_of_time_steps_for_d
 
             do k=1, 360
 
-                !print*, cummulated_data(k, j), data1(k,j),  cummulated_data(k, j)*data1(k,j)*(1.0/(number_of_time_steps_for_deformaion-100))
-
                 averaged_dissipation_on_grid(i, k, j) = averaged_dissipation_on_grid(i, k, j) + cummulated_data(k, j)*data1(k,j)*(1.0/(number_of_time_steps_for_deformaion-100))
 
             end do
 
         end do
-
-        !shz_tens(, xx, xy, xz, yx, yy, yz, zx, zy, zz)
 
     end do
 
@@ -4905,19 +4850,20 @@ subroutine update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, 
 
     elapsed_time = end_time - start_time
 
-    print*, "Elapsed time inside the funcion :", elapsed_time, "seconds"
+    !print*, "Elapsed time inside the funcion :", elapsed_time, "seconds"
 
     deallocate(cajm, ctjml, cjml)
 
 end subroutine
 
-subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+subroutine dissipation_from_grid_and_total(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation, Total_averaged_dissipation)
     implicit none
 
     integer, intent(in) :: number_of_layers, jmax
     real*8 :: radius, delta_r
     real*8 averaged_dissipation_on_grid(number_of_layers,360, 180)
     complex*16 :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    real*8, intent(inout) :: Total_averaged_dissipation
 
     complex*16 :: sqrt_dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
     real*8 :: sqrt_on_grid(360, 180), data1(360,180)
@@ -4930,59 +4876,19 @@ subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, 
     real*8 :: Q_total
     real*8 :: theta, weight, pi
 
-    ! Q_total=0
-    ! sqrt_dissipation=0
+    do i=1, number_of_layers
 
-    ! do i=1, number_of_layers
+        call HARMAN(180,jmax,averaged_dissipation_on_grid(i,:,:),crhs)
+        call HARMLS(180,jmax,crhs,coef)
 
-    !     sqrt_on_grid = 0
+        do j=0,jmax
+            do m=0,j
+            o=j*(j+1)/2+m+1
+            dissipation(i,o) = coef(o)
+            enddo
+        enddo
 
-    !     do j=1, 180
-
-    !         do k=1, 360
-
-    !             sqrt_on_grid(k, j) = dsqrt(averaged_dissipation_on_grid(i,k,j))
-
-    !         end do
-
-    !     end do
-
-    !     call HARMAN(180,jmax,sqrt_on_grid,crhs)
-    !     call HARMLS(180,jmax,crhs,coef)
-
-    !     do j=0,jmax
-    !         do m=0,j
-    !         o=j*(j+1)/2+m+1
-    !         sqrt_dissipation(i,o) = coef(o)
-    !         enddo
-    !     enddo
-
-    ! end do
-
-    ! do i = 1, number_of_layers
-    !     Qcum = 0d0            
-    
-    !     do j = 0, jmax
-    !         do m = 0, j
-    !             o=j*(j+1)/2+m+1
-    !             fac = 2d0
-    !             if (m .eq. 0) fac = 1d0  ! Set fac=1d0 only for m=0
-
-    !             Qcum = Qcum + fac*(dreal(sqrt_dissipation(i,o))**2 + aimag(sqrt_dissipation(i,o))**2)
-                
-    !         end do
-    !     end do
-    
-    !     Q(i) = Qcum
-    ! end do
-    
-    ! ! Apply the trapezoidal rule to approximate the integral
-    ! do m = 1, number_of_layers - 1
-    !     Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
-    ! end do
-    
-    ! ! Output the result
-    ! print*, 'The total dissipation from grid synthesiz', Q_total
+    end do
 
     Q_total=0
 
@@ -4993,10 +4899,6 @@ subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, 
         Qcum = 0.0d0
 
         call HARMSY(180, jmax, dissipation(i,:), data1)
-        ! do k=1, (jmax + 1) * (jmax + 2) / 2
-        !     print*, i, k, dissipation(i,k)
-        ! end do
-
 
         ! Loop over latitude and longitude
         do k = 1, 180
@@ -5017,7 +4919,7 @@ subroutine calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, 
         Q_total = Q_total + ((Q(m) * (radius + (m - 1) * delta_r)**2 + Q(m + 1) * (radius + m * delta_r)**2) / 2.0d0) * delta_r
     end do
 
-
+    Total_averaged_dissipation = Q_total
 
     ! Output the result
     print*, 'The total dissipation from integral of averaged dissipation', Q_total
@@ -5143,7 +5045,7 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
     Qcum / (1.0E9)
     close(62)
 
-
+    print*, 'Total upper heat flux:', Qcum / (1.0E9)
 
     open(unit=61, file=trim(trim(folder_name) // "/upper_heat_flux.txt"), status="old", action="write", position="append")
         
@@ -5185,6 +5087,8 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
     write(63, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9), &
     Qcum / (1.0E9)
     close(63)
+
+    print*, 'Total upper heat flux:', Qcum / (1.0E9)
 
 end subroutine calculate_and_write_heat_flux
 
@@ -5452,11 +5356,11 @@ program Europa_simulation
         ! Main simulation loop over time steps, careful to number_of_time_steps - 1
         do t=0,number_of_time_steps_for_deformaion-1
 
-            call CPU_TIME(end_time)
+            !call CPU_TIME(end_time)
 
-            elapsed_time = end_time - start_time
+            !elapsed_time = end_time - start_time
 
-            print*, "Elapsed time in one cycle :", elapsed_time, "seconds"
+            !print*, "Elapsed time in one cycle :", elapsed_time, "seconds"
 
             call CPU_TIME(start_time)
 
@@ -5502,50 +5406,22 @@ program Europa_simulation
                 call test_equations_solution(number_of_layers, jmax, radius, delta_r, mu, ice_density, surface_g, bottom_g, delta_rho, volume_force, bottom_force, cauchy_integral, cauchy, cauchy_isotropic, displacement)
 
             end if
-
-            call update_cauchy_times_fluidity_2(jmax, number_of_layers, delta_t, eta, mu, cauchy_integral, cauchy, fluidity_2, cauchy_times_fluidity_2)
-
-            if (t>0) then
-
-                call calculate_global_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, t, radius, delta_r, cauchy_times_fluidity_2, cauchy, Q_in_time)
-
-            end if
             
             if (t>99) then
 
-                Total_averaged_dissipation = Total_averaged_dissipation + Q_in_time(t)*(1.0/(number_of_time_steps_for_deformaion-100))
-
-                print*, "Total averaged dissipation:", Total_averaged_dissipation
-
-                ! Check if Total_averaged_dissipation is NaN or negative
-                if (Total_averaged_dissipation /= Total_averaged_dissipation .or. Total_averaged_dissipation < 0.0) then
-                    print*, "Error: Total averaged dissipation is NaN or negative. Terminating program."
-                    stop
-                end if
-
-                call update_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid, dissipation)
-
-                call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+                call update_grid_dissipation(number_of_layers, jmax, number_of_time_steps_for_deformaion, cauchy, fluidity_2, averaged_dissipation_on_grid)
 
             end if
 
         end do
 
-        do i=1, number_of_layers
+        call dissipation_from_grid_and_total(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation, Total_averaged_dissipation)
 
-            call HARMAN(180,jmax,averaged_dissipation_on_grid(i,:,:),crhs)
-            call HARMLS(180,jmax,crhs,coef)
-
-            do j=0,jmax
-                do m=0,j
-                o=j*(j+1)/2+m+1
-                dissipation(i,o) = coef(o)
-                enddo
-            enddo
-
-        end do
-
-        call calculate_global_dissipation_from_sqrt_dissipation(number_of_layers, jmax, radius, delta_r, averaged_dissipation_on_grid, dissipation)
+        ! Check if Total_averaged_dissipation is NaN or negative
+        if (Total_averaged_dissipation /= Total_averaged_dissipation .or. Total_averaged_dissipation < 0.0) then
+            print*, "Error: Total averaged dissipation is NaN or negative. Terminating program."
+            stop
+        end if
 
         !!!!!!
         !dissipation = 0
@@ -5559,7 +5435,7 @@ program Europa_simulation
         call update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
 
         do t=1, number_of_steps_for_heat_equation - 1
-            print*, 'Heat equation step:', t
+            !print*, 'Heat equation step:', t
 
             call update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation)
 
