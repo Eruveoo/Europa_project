@@ -4346,20 +4346,22 @@ subroutine update_grid_dissipation(number_of_layers, jmax, number_of_time_steps_
 end subroutine
 
 
-subroutine initial_explicit_euler_update(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, dissipation)
+subroutine initial_explicit_euler_update(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, dissipation, upper_dirichlet_temperature, lower_dirichlet_temperature)
     implicit none
 
     integer, intent(in) :: number_of_layers, jmax
     real*8, intent(in) :: heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p
-    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
     complex*16, intent(in) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: upper_dirichlet_temperature((jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: lower_dirichlet_temperature((jmax + 1) * (jmax + 2) / 2)
 
     integer :: i, j, m, base_idx
     complex*16 :: second_derivative, first_derivative, third_term, j1
 
 
-    do i=2, number_of_layers-1
+    do i=2, number_of_layers
 
         do j=0, jmax
 
@@ -4370,9 +4372,9 @@ subroutine initial_explicit_euler_update(number_of_layers, jmax, heat_equation_d
                 base_idx = j*(j+1)/2+m+1
 
                 second_derivative = (1.0/(delta_r*delta_r))*(log_temperature(i+1, base_idx)-2*log_temperature(i, base_idx)+log_temperature(i-1, base_idx))
-                first_derivative = (2.0/((radius+(i-1)*delta_r)*2.0*delta_r))*(log_temperature(i+1, base_idx) - log_temperature(i-1, base_idx))
-                third_term = - (j1*(j1+1))/((radius+(i-1)*delta_r)*(radius+(i-1)*delta_r))*log_temperature(i, base_idx)
-                temperature(i, base_idx) = temperature(i, base_idx) + heat_equation_delta_t*((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term) + heat_equation_delta_t*(1.0/(ice_density*c_p))*dissipation(i, base_idx)
+                first_derivative = (2.0/((radius+(i-(3.0)/(2.0))*delta_r)*2.0*delta_r))*(log_temperature(i+1, base_idx) - log_temperature(i-1, base_idx))
+                third_term = - (j1*(j1+1))/((radius+(i-(3.0)/(2.0))*delta_r)*(radius+(i-(3.0)/(2.0))*delta_r))*log_temperature(i, base_idx)
+                temperature(i, base_idx) = temperature(i, base_idx) + heat_equation_delta_t*((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term) + heat_equation_delta_t*(1.0/(ice_density*c_p))*(dissipation(i, base_idx)+dissipation(i-1, base_idx))/(2.0)
 
             end do
 
@@ -4380,23 +4382,38 @@ subroutine initial_explicit_euler_update(number_of_layers, jmax, heat_equation_d
 
     end do
 
+    do j =0, jmax
+
+        do m=0,j
+
+            base_idx = j*(j+1)/2+m+1
+
+            temperature(1,i) = 2.0*lower_dirichlet_temperature(i)-temperature(2,i)
+            temperature(number_of_layers+1,i) = 2.0*upper_dirichlet_temperature(i)-temperature(number_of_layers,i)
+
+        end do
+
+    end do
+
 end subroutine
 
-subroutine update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation)
+subroutine update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation, upper_dirichlet_temperature, lower_dirichlet_temperature)
     implicit none
 
     integer, intent(in) :: number_of_layers, jmax
     real*8, intent(in) :: heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p
-    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature_previous(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature_previous(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: upper_dirichlet_temperature((jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: lower_dirichlet_temperature((jmax + 1) * (jmax + 2) / 2)
     complex*16, intent(in) :: dissipation(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
 
     integer :: i, j, m, base_idx
     complex*16 :: second_derivative, first_derivative, third_term, second_derivative_, first_derivative_, third_term_, first_part, second_part
     real*8 :: j1
 
-    do i=2, number_of_layers-1
+    do i=2, number_of_layers
 
         do j=0, jmax
 
@@ -4407,18 +4424,31 @@ subroutine update_temperature(number_of_layers, jmax, heat_equation_delta_t, rad
                 base_idx = j*(j+1)/2+m+1
 
                 second_derivative = (1.0/(delta_r*delta_r))*(log_temperature(i+1, base_idx)-2*log_temperature(i, base_idx)+log_temperature(i-1, base_idx))
-                first_derivative = (2.0/((radius+(i-1)*delta_r)*2.0*delta_r))*(log_temperature(i+1, base_idx) - log_temperature(i-1, base_idx))
-                third_term = - (j1*(j1+1))/((radius+(i-1)*delta_r)*(radius+(i-1)*delta_r))*log_temperature(i, base_idx)
+                first_derivative = (2.0/((radius+(i-(3.0)/(2.0))*delta_r)*2.0*delta_r))*(log_temperature(i+1, base_idx) - log_temperature(i-1, base_idx))
+                third_term = - (j1*(j1+1))/((radius+(i-(3.0)/(2.0))*delta_r)*(radius+(i-(3.0)/(2.0))*delta_r))*log_temperature(i, base_idx)
                 first_part = ((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term)
                 
                 second_derivative_ = (1.0/(delta_r*delta_r))*(log_temperature_previous(i+1, base_idx)-2*log_temperature_previous(i, base_idx)+log_temperature_previous(i-1, base_idx))
-                first_derivative_ = (2.0/((radius+(i-1)*delta_r)*2.0*delta_r))*(log_temperature_previous(i+1, base_idx) - log_temperature_previous(i-1, base_idx))
-                third_term_ = - (j1*(j1+1))/((radius+(i-1)*delta_r)*(radius+(i-1)*delta_r))*log_temperature_previous(i, base_idx)
+                first_derivative_ = (2.0/((radius+(i-(3.0)/(2.0))*delta_r)*2.0*delta_r))*(log_temperature_previous(i+1, base_idx) - log_temperature_previous(i-1, base_idx))
+                third_term_ = - (j1*(j1+1))/((radius+(i-(3.0)/(2.0))*delta_r)*(radius+(i-(3.0)/(2.0))*delta_r))*log_temperature_previous(i, base_idx)
                 second_part = ((k_0)/(ice_density*c_p))*(second_derivative+first_derivative+third_term)
 
-                temperature(i, base_idx) = temperature(i, base_idx) + heat_equation_delta_t*((3.0/2.0)*first_part - (1.0/2.0)*second_part) + (1.0/(ice_density*c_p))*dissipation(i, base_idx)*heat_equation_delta_t
+                temperature(i, base_idx) = temperature(i, base_idx) + heat_equation_delta_t*((3.0/2.0)*first_part - (1.0/2.0)*second_part) + heat_equation_delta_t*(1.0/(ice_density*c_p))*(dissipation(i, base_idx)+dissipation(i-1, base_idx))/(2.0)
 
             end do
+
+        end do
+
+    end do
+
+    do j =0, jmax
+
+        do m=0,j
+
+            base_idx = j*(j+1)/2+m+1
+
+            temperature(1,i) = 2.0*lower_dirichlet_temperature(i)-temperature(2,i)
+            temperature(number_of_layers+1,i) = 2.0*upper_dirichlet_temperature(i)-temperature(number_of_layers,i)
 
         end do
 
@@ -4430,9 +4460,9 @@ subroutine update_log_temperature(number_of_layers, jmax, temperature, log_tempe
     implicit none
 
     integer, intent(in) :: number_of_layers, jmax
-    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature_previous(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature_previous(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
 
     integer :: i, k, l, m, max_scalar_index
     
@@ -4443,7 +4473,7 @@ subroutine update_log_temperature(number_of_layers, jmax, temperature, log_tempe
     max_scalar_index = (jmax + 1) * (jmax + 2) / 2
 
 
-    do i=2, number_of_layers-1
+    do i=1, number_of_layers+1
 
         do k=1, max_scalar_index
 
@@ -4476,14 +4506,14 @@ subroutine update_log_temperature(number_of_layers, jmax, temperature, log_tempe
 
 end subroutine
 
-subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, &
+subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, thickness, &
     temperature, folder_name, num_angles, angles)
     implicit none
 
     ! Inputs
     integer, intent(in) :: number_of_layers, jmax, t, k, number_of_steps_for_heat_equation
-    real*8, intent(in) :: heat_equation_delta_t, delta_r
-    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    real*8, intent(in) :: heat_equation_delta_t, delta_r, thickness
+    complex*16, intent(inout) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
     character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
     integer, intent(in) :: num_angles  ! Number of predefined angles
     integer, dimension(num_angles,2), intent(in) :: angles  ! Array of (latitude, longitude) pairs
@@ -4539,14 +4569,22 @@ subroutine write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_
         ! Write time information
         write(file_unit, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
 
+        call HARMSY(180, jmax, (temperature(1,:)+temperature(2,:))/(2.0), data)
+        write(file_unit, *) 0, &
+            data(angles(i,2)+1, 180-angles(i,1))
+
         ! Loop over layers to write temperature at specific lat/lon
-        do layer_index = 1, number_of_layers
+        do layer_index = 2, number_of_layers
             call HARMSY(180, jmax, temperature(layer_index,:), data)
 
             ! Select temperature at the corresponding (lat, lon)
-            write(file_unit, *) (layer_index-1)*delta_r/(1000.0), &
+            write(file_unit, *) (layer_index-(3.0)/(2.0))*delta_r/(1000.0), &
             data(angles(i,2)+1, 180-angles(i,1))
         end do
+
+        call HARMSY(180, jmax, (temperature(number_of_layers,:)+temperature(number_of_layers+1,:))/(2.0), data)
+        write(file_unit, *) (thickness)/(1000.0), &
+            data(angles(i,2)+1, 180-angles(i,1))
 
         ! Close file
         close(file_unit)
@@ -4628,7 +4666,7 @@ subroutine calculate_fluidity_2(number_of_layers, jmax, eta_0, temperature, flui
 
     integer, intent(in) :: number_of_layers, jmax
     real*8, intent(in) :: eta_0
-    complex*16, intent(in) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
     complex*16, intent(inout) :: fluidity_2(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
 
     real*8, allocatable :: temperature_data(:,:), fluidity_2_data(:,:)
@@ -4642,7 +4680,7 @@ subroutine calculate_fluidity_2(number_of_layers, jmax, eta_0, temperature, flui
 
     do i=1, number_of_layers
 
-        call HARMSY(180, jmax, temperature(i,:), temperature_data)
+        call HARMSY(180, jmax, (temperature(i,:)+temperature(i+1,:))/2.0, temperature_data)
 
         do l=1, 180
 
@@ -4720,21 +4758,22 @@ subroutine write_fluidity_2_data(number_of_layers, jmax, t, k, number_of_steps_f
 end subroutine write_fluidity_2_data
 
 
-subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
+subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous, upper_dirichlet_temperature, lower_dirichlet_temperature)
     implicit none
 
     ! Inputs
     integer, intent(in) :: number_of_layers, jmax
-    complex*16, intent(inout) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-    complex*16, intent(inout) :: log_temperature_previous(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
-
+    complex*16, intent(inout) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: log_temperature_previous(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: upper_dirichlet_temperature((jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(inout) :: lower_dirichlet_temperature((jmax + 1) * (jmax + 2) / 2)
 
     ! Local variables
     real*8, allocatable :: temperature_data(:,:), log_temperature_data(:,:)
-    integer :: j, m, i, k, max_scalar_index
+    integer :: j, m, i, k, max_scalar_index, l
     integer :: q, w
-    complex*16 :: coef_
+    complex*16 :: coef_, delta_coef
     character(len=100) :: file_path_1, file_path_2, file_path_3
     complex*16 coef(12000),crhs(12000),coef1(12000)
 
@@ -4745,29 +4784,39 @@ subroutine set_up_initial_values_for_temperature_and_log_temperature(number_of_l
 
     open(1,file='outer_dirichlet.dat') ! cteni SH koeficientu ze souboru
 
-    do j=0,30 ! cyklus pres stupen
-          do m=0,j    ! cyklus pres rad
-              read(1,*) q, w, coef_
-              i=j*(j+1)/2+m+1
-              temperature(number_of_layers, i) = coef_
-          enddo
-    enddo
-
-    close(1)
-
-    temperature(1,1) = 967.7
-
-    do i=2, number_of_layers - 1
-
-        do k=1, max_scalar_index
-
-            temperature(i,k) = ((((number_of_layers-1)-(i-1))*temperature(1,k)+(i-1)*temperature(number_of_layers,k))/(number_of_layers-1))
-
+    do j=0,30
+        do m=0,j
+            read(1,*) q, w, coef_
+            i=j*(j+1)/2+m+1
+            upper_dirichlet_temperature(i) = coef_
         end do
-
     end do
 
-    do i=1, number_of_layers
+    close(1)
+    
+    lower_dirichlet_temperature(1) = 967.7
+
+    do j=0,30 ! cyklus pres stupen
+        do m=0,j    ! cyklus pres rad
+            i=j*(j+1)/2+m+1
+
+            coef_ = upper_dirichlet_temperature(i)
+
+            if (j==0) then
+                delta_coef = (coef_ - lower_dirichlet_temperature(1))/(number_of_layers-1)
+            else
+                delta_coef = (coef_)/(number_of_layers-1)
+            end if
+
+            do l=1, number_of_layers+1
+
+                temperature(l,i) = lower_dirichlet_temperature(i) + (l-(3.0)/(2.0))*delta_coef
+
+            end do
+        enddo
+    enddo
+
+    do i=1, number_of_layers+1
 
         call HARMSY(180, jmax, temperature(i,:), temperature_data)
 
@@ -4922,7 +4971,7 @@ subroutine dissipation_from_grid_and_total(number_of_layers, jmax, radius, delta
     Total_averaged_dissipation = Q_total
 
     ! Output the result
-    print*, 'The total dissipation from integral of averaged dissipation', Q_total
+    print*, 'The total dissipation from integral of averaged dissipation', Q_total/(1.0E9)
 
 end subroutine
 
@@ -4932,7 +4981,7 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
     ! Inputs
     integer, intent(in) :: jmax, number_of_layers, k, number_of_steps_for_heat_equation
     real*8, intent(in) :: heat_equation_delta_t,radius, delta_r, thickness, k_0
-    complex*16, intent(in) :: temperature(number_of_layers, (jmax + 1) * (jmax + 2) / 2)
+    complex*16, intent(in) :: temperature(number_of_layers+1, (jmax + 1) * (jmax + 2) / 2)
     character(len=*), intent(in) :: folder_name  ! Folder path where files will be saved
 
     complex*16 :: lower_temperature_gradient(3 * (jmax * (jmax + 1) / 2 + jmax) + 1), upper_temperature_gradient(3 * (jmax * (jmax + 1) / 2 + jmax) + 1)
@@ -4960,19 +5009,19 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
 
             if (j==0) then
 
-                lower_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)-(j1)/(radius+(1.0)/(2.0)*delta_r)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
+                lower_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)-(j1)/(radius)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
 
-                upper_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers,scalar_index)-Temperature(number_of_layers-1,scalar_index))/(delta_r)-(j1)/(radius+thickness-(1.0)/(2.0)*delta_r)*(Temperature(number_of_layers,scalar_index)+Temperature(number_of_layers-1,scalar_index))/(2.0))
+                upper_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers+1,scalar_index)-Temperature(number_of_layers,scalar_index))/(delta_r)-(j1)/(radius+thickness)*(Temperature(number_of_layers+1,scalar_index)+Temperature(number_of_layers,scalar_index))/(2.0))
 
             else
 
-                lower_temperature_gradient(vector_index-1)= (dsqrt(j1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)+(j1+1)/(radius+(1.0)/(2.0)*delta_r)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
+                lower_temperature_gradient(vector_index-1)= (dsqrt(j1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)+(j1+1)/(radius)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
 
-                lower_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)-(j1)/(radius+(1.0)/(2.0)*delta_r)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
+                lower_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(2,scalar_index)-Temperature(1,scalar_index))/(delta_r)-(j1)/(radius)*(Temperature(2,scalar_index)+Temperature(1,scalar_index))/(2.0))
 
-                upper_temperature_gradient(vector_index-1)= (dsqrt(j1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers,scalar_index)-Temperature(number_of_layers-1,scalar_index))/(delta_r)+(j1+1)/(radius+thickness-(1.0)/(2.0)*delta_r)*(Temperature(number_of_layers,scalar_index)+Temperature(number_of_layers-1,scalar_index))/(2.0))
+                upper_temperature_gradient(vector_index-1)= (dsqrt(j1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers+1,scalar_index)-Temperature(number_of_layers,scalar_index))/(delta_r)+(j1+1)/(radius+thickness)*(Temperature(number_of_layers+1,scalar_index)+Temperature(number_of_layers,scalar_index))/(2.0))
 
-                upper_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers,scalar_index)-Temperature(number_of_layers-1,scalar_index))/(delta_r)-(j1)/(radius+thickness-(1.0)/(2.0)*delta_r)*(Temperature(number_of_layers,scalar_index)+Temperature(number_of_layers-1,scalar_index))/(2.0))
+                upper_temperature_gradient(vector_index+1)= - (dsqrt(j1+1))/(dsqrt(2*j1+1))*((Temperature(number_of_layers+1,scalar_index)-Temperature(number_of_layers,scalar_index))/(delta_r)-(j1)/(radius+thickness)*(Temperature(number_of_layers+1,scalar_index)+Temperature(number_of_layers,scalar_index))/(2.0))
 
             end if
 
@@ -5036,7 +5085,7 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
         end do
     end do
 
-    Qcum = Qcum*(radius+(1.0)/(2.0)*delta_r)*(radius+(1.0)/(2.0)*delta_r)
+    Qcum = Qcum*(radius)*(radius)
 
     open(unit=62, file=trim(trim(folder_name) // "/total_lower_heat_flux.txt"), status="old", action="write", position="append")
 
@@ -5045,7 +5094,7 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
     Qcum / (1.0E9)
     close(62)
 
-    print*, 'Total upper heat flux:', Qcum / (1.0E9)
+    print*, 'Total lower heat flux:', Qcum / (1.0E9)
 
     open(unit=61, file=trim(trim(folder_name) // "/upper_heat_flux.txt"), status="old", action="write", position="append")
         
@@ -5053,7 +5102,7 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
     write(61, *) (k-1) * number_of_steps_for_heat_equation * heat_equation_delta_t / (31536E9)
 
     call HARMSY(180, jmax, upper_radial_gradiant(:), readial_gradient_data)
-    call HARMSY(180, jmax, (temperature(number_of_layers,:)+temperature(number_of_layers-1,:))/2.0, temperature_data)
+    call HARMSY(180, jmax, (temperature(number_of_layers+1,:)+temperature(number_of_layers,:))/2.0, temperature_data)
 
 
     ! Write spatial data
@@ -5079,7 +5128,7 @@ subroutine calculate_and_write_heat_flux(jmax, number_of_layers, k, number_of_st
         end do
     end do
 
-    Qcum = Qcum*(radius+thickness-(1.0)/(2.0)*delta_r)*(radius+thickness-(1.0)/(2.0)*delta_r)
+    Qcum = Qcum*(radius+thickness)*(radius+thickness)
 
     open(unit=63, file=trim(trim(folder_name) // "/total_upper_heat_flux.txt"), status="old", action="write", position="append")
 
@@ -5122,7 +5171,7 @@ program Europa_simulation
     real*8, parameter :: excentricity = 0.009                           ! Eccentricity of Europa's orbit
     real*8, parameter :: k_0 = 651
     real*8, parameter :: c_p = 2108
-    real*8, parameter :: eta_0 = 1E15
+    real*8, parameter :: eta_0 = 1E13
 
     real*8, parameter :: delta_r = thickness / (number_of_layers - 1)   ! Radial distance between layers
 
@@ -5151,6 +5200,9 @@ program Europa_simulation
     complex*16, allocatable :: temperature(:,:)
     complex*16, allocatable :: log_temperature(:,:)
     complex*16, allocatable :: log_temperature_previous(:,:)
+
+    complex*16, allocatable :: upper_dirichlet_temperature(:)
+    complex*16, allocatable :: lower_dirichlet_temperature(:)
 
     complex*16, allocatable :: lower_temperature_gradient(:)
     complex*16, allocatable :: upper_temperature_gradient(:)
@@ -5215,9 +5267,12 @@ program Europa_simulation
     allocate(Q_in_time(number_of_time_steps_for_deformaion))
     allocate(dissipation(number_of_layers, max_scalar_index))
 
-    allocate(temperature(number_of_layers, max_scalar_index))
-    allocate(log_temperature(number_of_layers, max_scalar_index))
-    allocate(log_temperature_previous(number_of_layers, max_scalar_index))
+    allocate(temperature(number_of_layers+1, max_scalar_index))
+    allocate(log_temperature(number_of_layers+1, max_scalar_index))
+    allocate(log_temperature_previous(number_of_layers+1, max_scalar_index))
+
+    allocate(upper_dirichlet_temperature(max_scalar_index))
+    allocate(lower_dirichlet_temperature(max_scalar_index))
 
     allocate(lower_temperature_gradient(max_vector_index))
     allocate(upper_temperature_gradient(max_vector_index))
@@ -5226,7 +5281,7 @@ program Europa_simulation
 
 
     test = .FALSE.
-    write_simulation_data = .FALSE.
+    write_simulation_data = .TRUE.
 
     if (write_simulation_data) then
         ! Get the current date and time
@@ -5324,9 +5379,11 @@ program Europa_simulation
     temperature = 0.D0
     log_temperature = 0.D0
     log_temperature_previous = 0.D0
+    upper_dirichlet_temperature = 0.D0
+    lower_dirichlet_temperature = 0.D0
 
 
-    call set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
+    call set_up_initial_values_for_temperature_and_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous, upper_dirichlet_temperature, lower_dirichlet_temperature)
 
     call GNDD0(jmax)
 
@@ -5344,7 +5401,7 @@ program Europa_simulation
         end if
 
         if (write_simulation_data) then
-            call write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, temperature, folder_name, num_angles, angles)
+            call write_temperature_data(number_of_layers, jmax, t, k, number_of_steps_for_heat_equation, heat_equation_delta_t, delta_r, thickness, temperature, folder_name, num_angles, angles)
         end if
 
         call calculate_fluidity_2(number_of_layers, jmax, eta_0, temperature, fluidity_2)
@@ -5430,14 +5487,14 @@ program Europa_simulation
             call write_dissipation(number_of_layers, jmax, k, number_of_steps_for_heat_equation, heat_equation_delta_t, dissipation, Total_averaged_dissipation, folder_name)
         end if
 
-        call initial_explicit_euler_update(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, dissipation)
+        call initial_explicit_euler_update(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, dissipation, upper_dirichlet_temperature, lower_dirichlet_temperature)
 
         call update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
 
         do t=1, number_of_steps_for_heat_equation - 1
             !print*, 'Heat equation step:', t
 
-            call update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation)
+            call update_temperature(number_of_layers, jmax, heat_equation_delta_t, radius, delta_r, k_0, ice_density, c_p, temperature, log_temperature, log_temperature_previous, dissipation, upper_dirichlet_temperature, lower_dirichlet_temperature)
 
             call update_log_temperature(number_of_layers, jmax, temperature, log_temperature, log_temperature_previous)
 
